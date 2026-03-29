@@ -41,7 +41,7 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Build bundled action (ncc → build/)
+      - name: Build bundled action (ncc → dist/)
         run: pnpm run package
 
       - name: Configure Git
@@ -49,13 +49,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Commit build/ changes if any
+      - name: Commit dist/ changes if any
         run: |
-          git add build/
+          git add dist/
           if git diff --staged --quiet; then
-            echo "No changes to build/"
+            echo "No changes to dist/"
           else
-            git commit -m "chore: update build for release"
+            git commit -m "chore: update dist for release"
             git push
           fi
 

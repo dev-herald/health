@@ -2,10 +2,10 @@
   "name": "@dev-herald/health",
   "version": "0.1.0",
   "description": "GitHub Action: Knip JSON → Dev Herald health ingest API",
-  "main": "build/index.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc --noEmit",
-    "package": "pnpm run build && ncc build src/main.ts -o build --source-map --license licenses.txt",
+    "package": "pnpm run build && ncc build src/main.ts -o dist --source-map --license licenses.txt",
     "test": "vitest run",
     "test:watch": "vitest"
   },

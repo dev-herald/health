@@ -39,4 +39,4 @@ outputs:
 
 runs:
   using: 'node20'
-  main: 'build/index.js'
+  main: 'dist/index.js'
