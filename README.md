@@ -1,6 +1,6 @@
 # Health ingest — Dev Herald GitHub Action
 
-Upload [Knip](https://knip.dev) JSON (`--reporter json`) to the Dev Herald health ingest API (`POST /api/v1/health/ingest`).
+Upload [Knip](https://knip.dev) JSON to the Dev Herald health ingest API (`POST /api/v1/health/ingest`). Generate the report with `pnpm exec knip --reporter json --no-exit-code > results.json` (use `--no-exit-code` so the workflow can still upload when Knip reports issues).
 
 The compiled bundle lives in `build/` and is **committed** so consumers can use tagged versions without building locally.
 
@@ -8,26 +8,30 @@ The compiled bundle lives in `build/` and is **committed** so consumers can use 
 
 Create a [project API key](https://dev-herald.com) and store it as a secret (for example `DEV_HERALD_KEY`).
 
-### Monorepo: one combined Knip report
+Pin workflows with **`uses: dev-herald/health@v1`** (major-line tag), not semver patch tags like `@v0.1.0`.
+
+### Run Knip and upload
 
 ```yaml
 - name: Run Knip
-  run: pnpm knip --workspace apps/web --workspace packages/db --workspace packages/ui --reporter json > knip-results.json
+  run: pnpm exec knip --reporter json --no-exit-code > results.json
 
 - name: Upload to Dev Herald
-  uses: dev-herald/health@v0.1.0
+  uses: dev-herald/health@v1
   with:
     api-key: ${{ secrets.DEV_HERALD_KEY }}
-    knip-report-path: knip-results.json
+    knip-report-path: results.json
     workflow-run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 ```
+
+In a monorepo, pass `--workspace <path>` for each package you want included (before `--reporter json`), for example: `pnpm exec knip --workspace apps/web --workspace packages/ui --reporter json --no-exit-code > results.json`.
 
 ### Multiple report files
 
 Use **exactly one** of `knip-report-path` or `knip-report-paths` (not both). For several JSON files, use one path per line (optional `-` list prefix is stripped):
 
 ```yaml
-- uses: dev-herald/health@v0.1.0
+- uses: dev-herald/health@v1
   with:
     api-key: ${{ secrets.DEV_HERALD_KEY }}
     knip-report-paths: |

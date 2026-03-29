@@ -8,11 +8,12 @@ inputs:
     description: 'Dev Herald project API key (Bearer token)'
     required: true
   knip-report-path:
-    description: 'Path to a single Knip --reporter json output file'
+    description: 'Path to a single Knip JSON file (e.g. pnpm exec knip --reporter json --no-exit-code > results.json)'
     required: false
   knip-report-paths:
     description: |
-      Newline-separated paths to multiple Knip JSON files (merged before upload).
+      Newline-separated paths to multiple Knip JSON outputs (merged before upload).
+      Produce each file with e.g. pnpm exec knip --reporter json --no-exit-code > path.json
       Use exactly one of knip-report-path or knip-report-paths.
     required: false
   api-url:
