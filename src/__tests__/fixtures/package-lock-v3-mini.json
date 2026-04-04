@@ -1,0 +1,17 @@
+{
+  "lockfileVersion": 3,
+  "name": "fixture",
+  "packages": {
+    "": {
+      "name": "fixture",
+      "version": "0.0.0"
+    },
+    "node_modules/lodash": {
+      "version": "4.17.21"
+    },
+    "node_modules/eslint": {
+      "version": "8.57.0",
+      "dev": true
+    }
+  }
+}

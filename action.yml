@@ -10,8 +10,14 @@ inputs:
     required: true
 
   knip-report-path:
-    description: 'Path to a Knip JSON report file'
-    required: true
+    description: 'Path to a Knip JSON report file (optional if pnpm-lock.yaml or package-lock.json exists at repo root for CVE scanning)'
+    required: false
+    default: ''
+
+  cve-detail:
+    description: 'If true, fetch per-vulnerability details from OSV for severity breakdown (slower). Default: totals only.'
+    required: false
+    default: 'false'
 
   api-url:
     description: 'Dev Herald ingest API endpoint'

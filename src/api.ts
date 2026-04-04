@@ -10,7 +10,7 @@ export async function makeHttpRequest(
   url: string,
   method: string,
   headers: Record<string, string>,
-  body: RequestBody
+  body?: RequestBody
 ): Promise<HttpResponse> {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
@@ -20,15 +20,16 @@ export async function makeHttpRequest(
       return;
     }
 
-    const payload = JSON.stringify(body);
-    const options = {
+    const hasBody = body !== undefined && method !== 'GET' && method !== 'HEAD';
+    const payload = hasBody ? JSON.stringify(body) : '';
+    const options: https.RequestOptions = {
       hostname: parsedUrl.hostname,
       port: parsedUrl.port || 443,
       path: parsedUrl.pathname + parsedUrl.search,
       method,
       headers: {
         ...headers,
-        'Content-Length': Buffer.byteLength(payload),
+        ...(hasBody ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
       },
     };
 
@@ -49,7 +50,9 @@ export async function makeHttpRequest(
       reject(new Error(`Network error: ${error.message}`));
     });
 
-    req.write(payload);
+    if (hasBody) {
+      req.write(payload);
+    }
     req.end();
   });
 }

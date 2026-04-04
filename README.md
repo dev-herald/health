@@ -42,6 +42,11 @@ Example - Upload a report
     workflow-run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 ```
 
+The action **auto-detects a lockfile** at the **repository root** (preferring `pnpm-lock.yaml`, then `package-lock.json`). That matches typical monorepos: one lockfile for the whole workspace. It sends **CVE totals** (production vs development dependencies) to Dev Herald using the public **[OSV](https://osv.dev/)** API (`api.osv.dev`).
+
+Set `cve-detail: 'true'` to request a **severity breakdown** (critical / high / moderate / low / unknown); this fetches each vulnerability record from OSV and is slower.
+
+`knip-report-path` is optional if a supported lockfile is present; you can combine Knip + CVEs or either alone.
 
 Example - Generating data (Knip)
 
@@ -55,7 +60,9 @@ You can use tools like Knip to generate signals:
 
 Then upload the result using the action above.
 
-Knip is just one example - Dev Herald is designed to support multiple signals over time.
+This action already combines **Knip** (optional) and **CVE / OSV** (optional, when a lockfile exists).
+
+Which lockfile layouts are parsed for dependency extraction (pnpm 9–10, npm workspaces, etc.) is documented in [LOCKFILE-SUPPORT.md](LOCKFILE-SUPPORT.md).
 
 ---
 
@@ -64,7 +71,8 @@ Knip is just one example - Dev Herald is designed to support multiple signals ov
 | Input | Description |
 | ----- | ----------- |
 | `api-key` | Required. Project API key |
-| `knip-report-path` | Path to a single report file |
+| `knip-report-path` | Path to Knip JSON report (optional if `pnpm-lock.yaml` or `package-lock.json` exists at repo root) |
+| `cve-detail` | `true` to add OSV severity buckets (default: `false`, totals only) |
 | `api-url` | Defaults to Dev Herald ingest API |
 | `repository-full-name` | Optional override |
 | `commit-sha` | Optional override |

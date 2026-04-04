@@ -1,0 +1,24 @@
+{
+  "name": "workspace-root",
+  "lockfileVersion": 3,
+  "packages": {
+    "": {
+      "name": "workspace-root",
+      "workspaces": ["packages/*"]
+    },
+    "node_modules/react": {
+      "version": "18.2.0"
+    },
+    "packages/web/node_modules/react": {
+      "version": "18.2.0"
+    },
+    "packages/web/node_modules/eslint": {
+      "version": "8.57.0",
+      "dev": true
+    },
+    "node_modules/lodash": {
+      "version": "4.17.21",
+      "dev": true
+    }
+  }
+}

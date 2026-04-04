@@ -6,8 +6,17 @@ export const actionInputsSchema = z.object({
   apiKey: nonEmpty,
   knipReportPath: z
     .string()
-    .transform((s) => s.trim())
-    .pipe(z.string().min(1, 'Provide knip-report-path')),
+    .optional()
+    .default('')
+    .transform((s) => s.trim()),
+  cveDetail: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((s) => {
+      const v = s.trim().toLowerCase();
+      return v === 'true' || v === '1' || v === 'yes';
+    }),
   apiUrl: z
     .string()
     .min(1)

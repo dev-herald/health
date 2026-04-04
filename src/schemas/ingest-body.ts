@@ -7,11 +7,39 @@ export const knipSignalsSchema = z
   })
   .passthrough();
 
-export const healthSignalsSchema = z
+export const cveSeverityBucketsSchema = z.object({
+  critical: z.number().int().min(0),
+  high: z.number().int().min(0),
+  moderate: z.number().int().min(0),
+  low: z.number().int().min(0),
+  unknown: z.number().int().min(0),
+});
+
+export const cveDepsSignalSchema = z
   .object({
-    knip: knipSignalsSchema,
+    vulnerablePackages: z.number().int().min(0),
+    totalVulnerabilities: z.number().int().min(0),
+    severity: cveSeverityBucketsSchema.optional(),
   })
   .passthrough();
+
+export const cveSignalsSchema = z
+  .object({
+    lockfileType: z.string().min(1),
+    prod: cveDepsSignalSchema,
+    dev: cveDepsSignalSchema,
+  })
+  .passthrough();
+
+export const healthSignalsSchema = z
+  .object({
+    knip: knipSignalsSchema.optional(),
+    cve: cveSignalsSchema.optional(),
+  })
+  .passthrough()
+  .refine((s) => s.knip !== undefined || s.cve !== undefined, {
+    message: 'signals must include knip and/or cve',
+  });
 
 export const healthIngestRequestSchema = z
   .object({

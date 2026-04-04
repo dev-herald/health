@@ -26,20 +26,38 @@ describe('actionInputsSchema', () => {
     }
   });
 
-  it('rejects empty knip path', () => {
+  it('accepts empty knip path (CVE-only workflows)', () => {
     const r = actionInputsSchema.safeParse({
       ...base,
       knipReportPath: '',
     });
-    expect(r.success).toBe(false);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.knipReportPath).toBe('');
+    }
   });
 
-  it('rejects whitespace-only knip path', () => {
+  it('accepts whitespace-only knip path as empty', () => {
     const r = actionInputsSchema.safeParse({
       ...base,
       knipReportPath: '   ',
     });
-    expect(r.success).toBe(false);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.knipReportPath).toBe('');
+    }
+  });
+
+  it('parses cve-detail flag', () => {
+    const r = actionInputsSchema.safeParse({
+      ...base,
+      knipReportPath: 'x.json',
+      cveDetail: 'true',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.cveDetail).toBe(true);
+    }
   });
 
   it('rejects non-https api-url', () => {
