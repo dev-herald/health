@@ -8,6 +8,7 @@ const knipIssueRowSchema = z
     files: z.array(knipNamedItemSchema).optional(),
     dependencies: z.array(knipNamedItemSchema).optional(),
     devDependencies: z.array(knipNamedItemSchema).optional(),
+    types: z.array(knipNamedItemSchema).optional(),
   })
   .passthrough();
 

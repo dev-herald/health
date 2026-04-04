@@ -1,15 +1,14 @@
 import { z } from 'zod';
 
-export const knipSignalsSchema = z
-  .object({
-    unusedFiles: z.number().int().min(0),
-    unusedDependencies: z.number().int().min(0),
-  })
-  .passthrough();
+export const unusedCodeSchema = z.object({
+  unusedDepsList: z.array(z.string()),
+  unusedFilesList: z.array(z.string()),
+  unusedTypeExportsList: z.array(z.string()),
+});
 
 export const healthSignalsSchema = z
   .object({
-    knip: knipSignalsSchema,
+    unusedCode: unusedCodeSchema,
   })
   .passthrough();
 

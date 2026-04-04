@@ -45,16 +45,18 @@ async function run(): Promise<void> {
 
     const v = inputsParsed.data;
     const knipReport = readAndValidateKnipReport(v.knipReportPath);
-    const knipAgg = mapKnipReportToSignals(knipReport);
+    const unusedCode = mapKnipReportToSignals(knipReport);
 
     const payload = buildHealthIngestPayload({
-      knip: knipAgg,
+      unusedCode,
       repositoryFullName: v.repositoryFullName,
       commitSha: v.commitSha,
       workflowRunUrl: v.workflowRunUrl,
     });
 
-    core.info(`Knip aggregates: unusedFiles=${knipAgg.unusedFiles}, unusedDependencies=${knipAgg.unusedDependencies}`);
+    core.info(
+      `Unused code lists: files=${unusedCode.unusedFilesList.length}, deps=${unusedCode.unusedDepsList.length}, typeExports=${unusedCode.unusedTypeExportsList.length}`
+    );
     core.info(`POST ${v.apiUrl}`);
 
     const headers = buildHeaders(v.apiKey);

@@ -1,8 +1,8 @@
-import type { KnipAggregates } from './signals/knip';
+import type { KnipUnusedCodeLists } from './signals/knip';
 import { healthIngestRequestSchema, type HealthIngestRequest } from './schemas/ingest-body';
 
 export interface BuildPayloadOptions {
-  knip: KnipAggregates;
+  unusedCode: KnipUnusedCodeLists;
   repositoryFullName?: string;
   commitSha?: string;
   workflowRunUrl?: string;
@@ -13,10 +13,7 @@ export function buildHealthIngestPayload(options: BuildPayloadOptions): HealthIn
   const body: HealthIngestRequest = {
     timestamp: new Date().toISOString(),
     signals: {
-      knip: {
-        unusedFiles: options.knip.unusedFiles,
-        unusedDependencies: options.knip.unusedDependencies,
-      },
+      unusedCode: options.unusedCode,
     },
     ...(options.schemaVersion !== undefined ? { schemaVersion: options.schemaVersion } : {}),
     ...(options.repositoryFullName ? { repositoryFullName: options.repositoryFullName } : {}),
