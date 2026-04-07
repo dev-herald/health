@@ -9,7 +9,7 @@ export const unusedCodeSchema = z.object({
 export const cveSeverityBucketsSchema = z.object({
   critical: z.number().int().min(0),
   high: z.number().int().min(0),
-  moderate: z.number().int().min(0),
+  medium: z.number().int().min(0),
   low: z.number().int().min(0),
   unknown: z.number().int().min(0),
 });
@@ -17,13 +17,8 @@ export const cveSeverityBucketsSchema = z.object({
 /** Aggregate counts: only non-zero buckets need to be present. */
 export const cveEnvSeverityPartialSchema = cveSeverityBucketsSchema.partial();
 
-export const cveVulnSeverityLabelSchema = z.enum([
-  'critical',
-  'high',
-  'moderate',
-  'low',
-  'unknown',
-]);
+/** Matches Dev Herald ingest: CVSS-aligned medium (not npm's "moderate"); unknown = unclassified. */
+export const cveVulnSeverityLabelSchema = z.enum(['critical', 'high', 'medium', 'low', 'unknown']);
 
 export const cveVulnerabilitySchema = z.object({
   id: z.string().min(1),

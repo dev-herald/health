@@ -11,7 +11,7 @@ const DESCRIPTION_FALLBACK_MAX = 400;
 export interface SeverityBuckets {
   critical: number;
   high: number;
-  moderate: number;
+  medium: number;
   low: number;
   unknown: number;
 }
@@ -48,7 +48,7 @@ const DETAIL_CONCURRENCY = 10;
 const emptySeverity = (): SeverityBuckets => ({
   critical: 0,
   high: 0,
-  moderate: 0,
+  medium: 0,
   low: 0,
   unknown: 0,
 });
@@ -62,7 +62,7 @@ function parseCvssScore(s: string | undefined): number | undefined {
 export function bucketizeScore(score: number): keyof SeverityBuckets {
   if (score >= 9.0) return 'critical';
   if (score >= 7.0) return 'high';
-  if (score >= 4.0) return 'moderate';
+  if (score >= 4.0) return 'medium';
   if (score > 0) return 'low';
   return 'unknown';
 }
@@ -84,7 +84,7 @@ function severityFromParsedDetail(d: z.infer<typeof osvVulnDetailSchema>): keyof
       const u = sev.toUpperCase();
       if (u === 'CRITICAL') return 'critical';
       if (u === 'HIGH') return 'high';
-      if (u === 'MODERATE' || u === 'MEDIUM') return 'moderate';
+      if (u === 'MODERATE' || u === 'MEDIUM') return 'medium';
       if (u === 'LOW') return 'low';
     }
   }
@@ -272,7 +272,7 @@ export function sparseSeverityInstanceCounts(packages: CvePackageSignal[]): Part
     }
   }
   const out: Partial<SeverityBuckets> = {};
-  for (const k of ['critical', 'high', 'moderate', 'low', 'unknown'] as const) {
+  for (const k of ['critical', 'high', 'medium', 'low', 'unknown'] as const) {
     if (counts[k] > 0) out[k] = counts[k];
   }
   return Object.keys(out).length > 0 ? out : undefined;

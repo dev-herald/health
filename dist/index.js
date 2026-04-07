@@ -30665,19 +30665,14 @@ exports.unusedCodeSchema = zod_1.z.object({
 exports.cveSeverityBucketsSchema = zod_1.z.object({
     critical: zod_1.z.number().int().min(0),
     high: zod_1.z.number().int().min(0),
-    moderate: zod_1.z.number().int().min(0),
+    medium: zod_1.z.number().int().min(0),
     low: zod_1.z.number().int().min(0),
     unknown: zod_1.z.number().int().min(0),
 });
 /** Aggregate counts: only non-zero buckets need to be present. */
 exports.cveEnvSeverityPartialSchema = exports.cveSeverityBucketsSchema.partial();
-exports.cveVulnSeverityLabelSchema = zod_1.z.enum([
-    'critical',
-    'high',
-    'moderate',
-    'low',
-    'unknown',
-]);
+/** Matches Dev Herald ingest: CVSS-aligned medium (not npm's "moderate"); unknown = unclassified. */
+exports.cveVulnSeverityLabelSchema = zod_1.z.enum(['critical', 'high', 'medium', 'low', 'unknown']);
 exports.cveVulnerabilitySchema = zod_1.z.object({
     id: zod_1.z.string().min(1),
     severity: exports.cveVulnSeverityLabelSchema.optional(),
@@ -30816,7 +30811,7 @@ const DETAIL_CONCURRENCY = 10;
 const emptySeverity = () => ({
     critical: 0,
     high: 0,
-    moderate: 0,
+    medium: 0,
     low: 0,
     unknown: 0,
 });
@@ -30832,7 +30827,7 @@ function bucketizeScore(score) {
     if (score >= 7.0)
         return 'high';
     if (score >= 4.0)
-        return 'moderate';
+        return 'medium';
     if (score > 0)
         return 'low';
     return 'unknown';
@@ -30856,7 +30851,7 @@ function severityFromParsedDetail(d) {
             if (u === 'HIGH')
                 return 'high';
             if (u === 'MODERATE' || u === 'MEDIUM')
-                return 'moderate';
+                return 'medium';
             if (u === 'LOW')
                 return 'low';
         }
@@ -31015,7 +31010,7 @@ function sparseSeverityInstanceCounts(packages) {
         }
     }
     const out = {};
-    for (const k of ['critical', 'high', 'moderate', 'low', 'unknown']) {
+    for (const k of ['critical', 'high', 'medium', 'low', 'unknown']) {
         if (counts[k] > 0)
             out[k] = counts[k];
     }
