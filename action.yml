@@ -42,12 +42,7 @@ inputs:
     required: false
 
   turbopack-bundle-stats-path:
-    description: 'Path to next experimental-analyze --output dir (.next/diagnostics/analyze) or to route-bundle-stats.json from a Turbopack build'
-    required: false
-    default: ''
-
-  bundle-data:
-    description: 'Pre-computed bundle signal JSON string (escape hatch for other bundlers)'
+    description: 'Path to a Next bundle artifact: experimental-analyze --output dir (.next/diagnostics/analyze), webpack @next/bundle-analyzer output dir with client.json (analyzerMode json), route-bundle-stats.json (Turbopack), or a single webpack-bundle-analyzer JSON file'
     required: false
     default: ''
 

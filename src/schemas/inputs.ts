@@ -35,18 +35,6 @@ export const actionInputsSchema = z.object({
     .optional()
     .default('')
     .transform((s) => s.trim()),
-  bundleData: z
-    .string()
-    .optional()
-    .default('')
-    .transform((s) => s.trim()),
-})
-  .refine(
-    (d) => !(d.turbopackBundleStatsPath.length > 0 && d.bundleData.length > 0),
-    {
-      message: 'Provide only one of turbopack-bundle-stats-path or bundle-data, not both',
-      path: ['turbopackBundleStatsPath'],
-    }
-  );
+});
 
 export type ActionInputsValidated = z.infer<typeof actionInputsSchema>;

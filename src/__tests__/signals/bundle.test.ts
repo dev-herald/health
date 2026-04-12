@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { parseNextjsBundleStats } from '../../signals/bundle';
+import { parseNextjsBundleStats, parseWebpackBundleAnalyzerJson } from '../../signals/bundle';
 
 describe('parseNextjsBundleStats', () => {
   let tmp: string;
@@ -75,5 +75,34 @@ describe('parseNextjsBundleStats', () => {
     fs.writeFileSync(statsPath, JSON.stringify({ not: 'array' }));
 
     expect(() => parseNextjsBundleStats(statsPath)).toThrow(/JSON array/);
+  });
+});
+
+describe('parseWebpackBundleAnalyzerJson', () => {
+  it('aggregates chunk parsedSize and splits shared assets across app routes', () => {
+    const tree = [
+      {
+        label: 'static/chunks/shared.js',
+        isAsset: true,
+        statSize: 100,
+        parsedSize: 100,
+        isInitialByEntrypoint: { 'app/page': true, 'app/dashboard/page': true },
+      },
+      {
+        label: 'static/chunks/app/page.js',
+        isAsset: true,
+        parsedSize: 40,
+        isInitialByEntrypoint: { 'app/page': true },
+      },
+    ];
+
+    const bundle = parseWebpackBundleAnalyzerJson(tree);
+
+    expect(bundle.jsBytes).toBe(140);
+    expect(bundle.cssBytes).toBe(0);
+    expect(bundle.totalBytes).toBe(140);
+    expect(bundle.routes.map((r) => r.path).sort()).toEqual(['/', '/dashboard']);
+    expect(bundle.routes.find((r) => r.path === '/')?.totalBytes).toBe(90);
+    expect(bundle.routes.find((r) => r.path === '/dashboard')?.totalBytes).toBe(50);
   });
 });

@@ -2,8 +2,6 @@
 
 ## Knip
 
-Store your Dev Herald API key as a repo secret (for example `DEV_HERALD_KEY`), then in your workflow:
-
 ```yaml
       - name: Run Knip (JSON report)
         run: pnpm exec knip --reporter json --no-exit-code > knip-results.json
@@ -16,16 +14,7 @@ Store your Dev Herald API key as a repo secret (for example `DEV_HERALD_KEY`), t
           workflow-run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 ```
 
-On that same `with:` block you can add **`lockfile-path`** and **`cve-detail`** (see below) if you also want the CVE signal from a lockfile.
-
-## CVE checks
-
-The action reads a lockfile under the repo root by default (`pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`, `bun.lock` in that order). **OSV/CVE runs only for pnpm and npm lockfiles**; yarn or bun is skipped with a workflow warning.
-
-- **`lockfile-path`** — optional. Set to a specific file (for example in a monorepo). Omit or leave empty for auto-detect.
-- **`cve-detail`** — optional. With a supported lockfile, the action **always** sends `signals.cve` with `packages` (name, version, and OSV vulnerability ids for vulnerable deps). Set `'true'` to also call OSV per vulnerability for **per-issue severity**, optional **text summaries**, and **aggregate severity** counts (slower). With `'false'`, vulnerabilities are ids only (no severities or descriptions).
-
-You need **at least one** of a Knip report or a lockfile the CVE path can use. CVE-only example:
+## CVE only (lockfile)
 
 ```yaml
       - uses: actions/checkout@v4
@@ -34,11 +23,63 @@ You need **at least one** of a Knip report or a lockfile the CVE path can use. C
         uses: dev-herald/health@v1
         with:
           api-key: ${{ secrets.DEV_HERALD_KEY }}
-          workflow-run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           lockfile-path: ${{ github.workspace }}/package-lock.json
           cve-detail: 'false'
+          workflow-run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 ```
 
-Drop `lockfile-path` when auto-detect is enough. For Knip + CVE, keep `knip-report-path` and add these two keys on the same step.
+## Next.js bundle — Turbopack (`experimental-analyze`)
 
-See [README.md](README.md) for all inputs and outputs.
+```yaml
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: corepack enable pnpm && pnpm install --frozen-lockfile
+        working-directory: apps/web
+
+      - name: Production build
+        run: pnpm exec next build
+        working-directory: apps/web
+
+      - name: Write bundle analyze output
+        run: pnpm exec next experimental-analyze --output
+        working-directory: apps/web
+
+      - name: Upload health data to Dev Herald
+        uses: dev-herald/health@v1
+        with:
+          api-key: ${{ secrets.DEV_HERALD_KEY }}
+          turbopack-bundle-stats-path: apps/web/.next/diagnostics/analyze
+          workflow-run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+```
+
+## Next.js bundle — Webpack (`@next/bundle-analyzer`, JSON reports)
+
+```yaml
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: corepack enable pnpm && pnpm install --frozen-lockfile
+        working-directory: apps/web
+
+      - name: Production build (Webpack + analyzer JSON)
+        run: ANALYZE=true pnpm exec next build --webpack
+        working-directory: apps/web
+
+      - name: Upload health data to Dev Herald
+        uses: dev-herald/health@v1
+        with:
+          api-key: ${{ secrets.DEV_HERALD_KEY }}
+          turbopack-bundle-stats-path: apps/web/.next/analyze
+          workflow-run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+```
+
+`next.config` must enable `@next/bundle-analyzer` with `analyzerMode: 'json'` (and typically `openAnalyzer: false` in CI) so `.next/analyze/client.json` exists.

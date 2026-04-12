@@ -43,13 +43,13 @@ describe('actionInputsSchema', () => {
     expect(r.success).toBe(false);
   });
 
-  it('rejects both nextjs stats path and bundle-data', () => {
+  it('accepts turbopack-bundle-stats-path', () => {
     const r = actionInputsSchema.safeParse({
       ...base,
       knipReportPath: '',
-      turbopackBundleStatsPath: '.next/diagnostics/route-bundle-stats.json',
-      bundleData: '{"totalBytes":1,"jsBytes":1,"cssBytes":0,"routes":[{"path":"/","totalBytes":1}]}',
+      turbopackBundleStatsPath: '.next/analyze',
     });
-    expect(r.success).toBe(false);
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.turbopackBundleStatsPath).toBe('.next/analyze');
   });
 });

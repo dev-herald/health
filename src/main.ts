@@ -36,7 +36,6 @@ async function run(): Promise<void> {
       (typeof ctx.sha === 'string' && ctx.sha.length > 0 ? ctx.sha : undefined);
     const workflowRunUrl = optionalString(core.getInput('workflow-run-url'));
     const turbopackBundleStatsPathRaw = core.getInput('turbopack-bundle-stats-path');
-    const bundleDataRaw = core.getInput('bundle-data');
 
     const inputsParsed = actionInputsSchema.safeParse({
       apiKey,
@@ -48,7 +47,6 @@ async function run(): Promise<void> {
       commitSha,
       workflowRunUrl,
       turbopackBundleStatsPath: turbopackBundleStatsPathRaw,
-      bundleData: bundleDataRaw,
     });
 
     if (!inputsParsed.success) {
@@ -74,23 +72,6 @@ async function run(): Promise<void> {
       bundle = validated.data;
       core.info(
         `Bundle (Next.js): routes=${bundle.routes.length} jsBytes=${bundle.jsBytes} cssBytes=${bundle.cssBytes} totalBytes=${bundle.totalBytes}`
-      );
-    } else if (v.bundleData.length > 0) {
-      let raw: unknown;
-      try {
-        raw = JSON.parse(v.bundleData) as unknown;
-      } catch {
-        throw new Error('bundle-data is not valid JSON');
-      }
-      const validated = bundleSignalSchema.safeParse(raw);
-      if (!validated.success) {
-        throw new Error(
-          `bundle-data validation failed: ${validated.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`
-        );
-      }
-      bundle = validated.data;
-      core.info(
-        `Bundle (raw JSON): routes=${bundle.routes.length} jsBytes=${bundle.jsBytes} cssBytes=${bundle.cssBytes} totalBytes=${bundle.totalBytes}`
       );
     }
 
@@ -133,7 +114,7 @@ async function run(): Promise<void> {
 
     if (!unusedCode && !cveAgg && !bundle) {
       throw new Error(
-        'No signals to send. Provide knip-report-path, a supported lockfile for CVE scanning, turbopack-bundle-stats-path (experimental-analyze --output dir or route-bundle-stats.json), and/or bundle-data.'
+        'No signals to send. Provide knip-report-path, a supported lockfile for CVE scanning, and/or turbopack-bundle-stats-path (Next bundle / analyze output).'
       );
     }
 
