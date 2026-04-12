@@ -4,6 +4,9 @@
     "build": {
       "outputs": [".next/**", "dist/**"]
     },
+    "test:prep": {
+      "outputs": [".next/diagnostics/**"]
+    },
     "test": {},
     "typecheck": {}
   }
