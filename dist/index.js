@@ -30039,12 +30039,13 @@ function cveToPayloadShape(c) {
     };
 }
 function buildHealthIngestPayload(options) {
-    if (!options.unusedCode && !options.cve) {
-        throw new Error('At least one of unusedCode (Knip) or cve signals is required');
+    if (!options.unusedCode && !options.cve && !options.bundle) {
+        throw new Error('At least one of unusedCode (Knip), cve, or bundle signals is required');
     }
     const signals = {
         ...(options.unusedCode ? { unusedCode: options.unusedCode } : {}),
         ...(options.cve ? { cve: cveToPayloadShape(options.cve) } : {}),
+        ...(options.bundle ? { bundle: options.bundle } : {}),
     };
     const body = {
         timestamp: new Date().toISOString(),
@@ -30065,88 +30066,199 @@ function buildHealthIngestPayload(options) {
 
 /***/ }),
 
+/***/ 9146:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.bunAdapter = void 0;
+/** Bun lockfile / CLI path not wired yet; parity with previous yarn skip. */
+exports.bunAdapter = {
+    pmName: 'bun',
+    osvEcosystem: 'npm',
+    supported: false,
+    async listDeps() {
+        return [];
+    },
+};
+
+
+/***/ }),
+
+/***/ 618:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.npmAdapter = void 0;
+const fs_1 = __nccwpck_require__(9896);
+const parse_npm_1 = __nccwpck_require__(3725);
+exports.npmAdapter = {
+    pmName: 'npm',
+    osvEcosystem: 'npm',
+    supported: true,
+    async listDeps(_lockfileDir, lockfilePath) {
+        const content = (0, fs_1.readFileSync)(lockfilePath, 'utf8');
+        return (0, parse_npm_1.parseNpmLockfile)(content);
+    },
+};
+
+
+/***/ }),
+
+/***/ 3430:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.pnpmAdapter = void 0;
+exports.flattenPnpmListOutput = flattenPnpmListOutput;
+const child_process_1 = __nccwpck_require__(7698);
+const util_1 = __nccwpck_require__(9023);
+const parse_npm_1 = __nccwpck_require__(3725);
+const execFileAsync = (0, util_1.promisify)(child_process_1.execFile);
+function collectDepKeys(deps, into, pkgMap, visited) {
+    if (!deps)
+        return;
+    for (const [name, dep] of Object.entries(deps)) {
+        if (!dep?.version)
+            continue;
+        const key = `${name}@${dep.version}`;
+        if (visited.has(key))
+            continue;
+        visited.add(key);
+        into.add(key);
+        pkgMap.set(key, { name, version: dep.version });
+        collectDepKeys(dep.dependencies, into, pkgMap, visited);
+    }
+}
+/**
+ * Converts the array emitted by `pnpm list --json --depth Infinity --lockfile-only`
+ * into a flat `Dependency[]`.  Exported for unit testing without running pnpm.
+ *
+ * Prod wins: if a package is reachable from both a `dependencies` subtree and a
+ * `devDependencies` subtree (across all workspaces), it is classified as prod.
+ */
+function flattenPnpmListOutput(workspaces) {
+    const prodKeys = new Set();
+    const devKeys = new Set();
+    const pkgMap = new Map();
+    for (const ws of workspaces) {
+        collectDepKeys(ws.dependencies, prodKeys, pkgMap, new Set());
+        collectDepKeys(ws.devDependencies, devKeys, pkgMap, new Set());
+    }
+    const out = [];
+    for (const [key, pkg] of pkgMap) {
+        const isDev = devKeys.has(key) && !prodKeys.has(key);
+        out.push({ name: pkg.name, version: pkg.version, isDev });
+    }
+    return (0, parse_npm_1.dedupeDependencies)(out);
+}
+exports.pnpmAdapter = {
+    pmName: 'pnpm',
+    osvEcosystem: 'npm',
+    supported: true,
+    async listDeps(lockfileDir, _lockfilePath) {
+        // Single run: JSON already splits prod vs dev per workspace (`dependencies` vs
+        // `devDependencies`). No second `pnpm list --prod` pass — we classify from that tree.
+        let stdout;
+        try {
+            ({ stdout } = await execFileAsync('pnpm', ['list', '--json', '--depth', 'Infinity', '--lockfile-only'], { cwd: lockfileDir, maxBuffer: 50 * 1024 * 1024 }));
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            throw new Error(`pnpm list failed: ${msg}`);
+        }
+        let raw;
+        try {
+            raw = JSON.parse(stdout);
+        }
+        catch {
+            throw new Error('pnpm list: failed to parse JSON output');
+        }
+        if (!Array.isArray(raw)) {
+            throw new Error('pnpm list: expected JSON array output');
+        }
+        return flattenPnpmListOutput(raw);
+    },
+};
+
+
+/***/ }),
+
+/***/ 8185:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.yarnAdapter = void 0;
+/** Yarn v1 vs Berry differ too much for one CLI path; CVE extraction not implemented yet. */
+exports.yarnAdapter = {
+    pmName: 'yarn',
+    osvEcosystem: 'npm',
+    supported: false,
+    async listDeps() {
+        return [];
+    },
+};
+
+
+/***/ }),
+
 /***/ 4351:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.inferPmNameFromFilename = inferPmNameFromFilename;
 exports.inferLockfileTypeFromFilename = inferLockfileTypeFromFilename;
-exports.detectLockfile = detectLockfile;
+exports.detectAdapter = detectAdapter;
 const fs_1 = __nccwpck_require__(9896);
 const path_1 = __nccwpck_require__(6928);
+const bun_1 = __nccwpck_require__(9146);
+const npm_1 = __nccwpck_require__(618);
+const pnpm_1 = __nccwpck_require__(3430);
+const yarn_1 = __nccwpck_require__(8185);
 const PRIORITY = [
-    { file: 'pnpm-lock.yaml', type: 'pnpm' },
-    { file: 'yarn.lock', type: 'yarn' },
-    { file: 'package-lock.json', type: 'npm' },
-    { file: 'bun.lock', type: 'bun' },
+    { file: 'pnpm-lock.yaml', adapter: pnpm_1.pnpmAdapter },
+    { file: 'yarn.lock', adapter: yarn_1.yarnAdapter },
+    { file: 'package-lock.json', adapter: npm_1.npmAdapter },
+    { file: 'bun.lock', adapter: bun_1.bunAdapter },
 ];
-function inferLockfileTypeFromFilename(filename) {
+const ADAPTER_BY_FILENAME = new Map(PRIORITY.map((p) => [p.file.toLowerCase(), p.adapter]));
+function inferPmNameFromFilename(filename) {
     const base = filename.split(/[/\\]/).pop()?.toLowerCase() ?? '';
-    if (base === 'pnpm-lock.yaml')
-        return 'pnpm';
-    if (base === 'yarn.lock')
-        return 'yarn';
-    if (base === 'package-lock.json')
-        return 'npm';
-    if (base === 'bun.lock')
-        return 'bun';
-    return undefined;
+    return ADAPTER_BY_FILENAME.get(base)?.pmName;
 }
-function detectLockfile(workspaceRoot, overridePath) {
+/** @deprecated Use {@link inferPmNameFromFilename} */
+function inferLockfileTypeFromFilename(filename) {
+    return inferPmNameFromFilename(filename);
+}
+function detectAdapter(workspaceRoot, overridePath) {
     if (overridePath !== undefined && overridePath.trim().length > 0) {
         const full = (0, path_1.resolve)(overridePath.trim());
         if (!(0, fs_1.existsSync)(full)) {
             throw new Error(`lockfile-path not found: ${full}`);
         }
-        const inferred = inferLockfileTypeFromFilename(full);
-        if (!inferred) {
+        const base = full.split(/[/\\]/).pop()?.toLowerCase() ?? '';
+        const adapter = ADAPTER_BY_FILENAME.get(base);
+        if (!adapter) {
             throw new Error(`Could not infer lockfile type from filename; use pnpm-lock.yaml, yarn.lock, package-lock.json, or bun.lock`);
         }
-        return { type: inferred, path: full };
+        return { adapter, lockfileDir: (0, path_1.dirname)(full), lockfilePath: full };
     }
-    for (const { file, type } of PRIORITY) {
+    for (const { file, adapter } of PRIORITY) {
         const full = (0, path_1.join)(workspaceRoot, file);
         if ((0, fs_1.existsSync)(full)) {
-            return { type, path: full };
+            return { adapter, lockfileDir: (0, path_1.dirname)(full), lockfilePath: full };
         }
     }
     throw new Error(`No lockfile found in ${workspaceRoot}. Expected one of: ${PRIORITY.map((p) => p.file).join(', ')}`);
-}
-
-
-/***/ }),
-
-/***/ 2743:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.parseLockfile = parseLockfile;
-const fs_1 = __nccwpck_require__(9896);
-const parse_npm_1 = __nccwpck_require__(3725);
-const parse_pnpm_1 = __nccwpck_require__(5499);
-/**
- * Yarn and Bun lockfiles may still be chosen by {@link detectLockfile} ordering;
- * CVE dependency extraction supports npm and pnpm only. Callers should warn when
- * type is `yarn` or `bun` and skip OSV aggregation.
- */
-function parseLockfile(type, lockfilePath) {
-    const content = (0, fs_1.readFileSync)(lockfilePath, 'utf8');
-    switch (type) {
-        case 'npm':
-            return (0, parse_npm_1.parseNpmLockfile)(content);
-        case 'pnpm':
-            return (0, parse_pnpm_1.parsePnpmLockfile)(content);
-        case 'yarn':
-        case 'bun':
-            return [];
-        default: {
-            const _x = type;
-            throw new Error(`Unknown lockfile type: ${_x}`);
-        }
-    }
 }
 
 
@@ -30236,140 +30348,6 @@ function dedupeDependencies(deps) {
 
 /***/ }),
 
-/***/ 5499:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.stripPeerSuffixFromKey = stripPeerSuffixFromKey;
-exports.parsePnpmPackageKey = parsePnpmPackageKey;
-exports.collectPnpmImporterProdDev = collectPnpmImporterProdDev;
-exports.extractPnpmPackageKeys = extractPnpmPackageKeys;
-exports.parsePnpmLockfile = parsePnpmLockfile;
-const parse_npm_1 = __nccwpck_require__(3725);
-function stripPeerSuffixFromKey(key) {
-    const p = key.indexOf('(');
-    return p >= 0 ? key.slice(0, p) : key;
-}
-function parsePnpmPackageKey(key) {
-    const head = stripPeerSuffixFromKey(key.trim());
-    const at = head.lastIndexOf('@');
-    if (at <= 0 || at === head.length - 1)
-        return null;
-    const name = head.slice(0, at);
-    const version = head.slice(at + 1);
-    if (!name || !version)
-        return null;
-    return { name, version };
-}
-function normalizeImporterVersion(v) {
-    return stripPeerSuffixFromKey(v.trim());
-}
-function collectPnpmImporterProdDev(content) {
-    const prod = new Set();
-    const dev = new Set();
-    const beforePackages = content.split(/^packages:\s*$/m)[0] ?? content;
-    const importersChunk = beforePackages.split(/^importers:\s*$/m)[1];
-    if (!importersChunk)
-        return { prod, dev };
-    const lines = importersChunk.split(/\r?\n/);
-    function parseDepBlock(target) {
-        while (lines[i] !== undefined) {
-            const line = lines[i] ?? '';
-            if (line.startsWith('    ') && !line.startsWith('      ')) {
-                break;
-            }
-            if (!line.startsWith('      ')) {
-                i++;
-                continue;
-            }
-            const nameM = line.match(/^ {6}(?:'([^']+)'|"([^"]+)"|([^:]+)):\s*$/);
-            if (!nameM) {
-                i++;
-                continue;
-            }
-            const pkgName = (nameM[1] ?? nameM[2] ?? nameM[3] ?? '').trim();
-            i++;
-            let ver = '';
-            while (lines[i] !== undefined && /^ {8}/.test(lines[i])) {
-                const vm = lines[i].match(/^\s+version:\s*(.+)$/);
-                if (vm) {
-                    let v = vm[1].trim();
-                    if ((v.startsWith("'") && v.endsWith("'")) || (v.startsWith('"') && v.endsWith('"'))) {
-                        v = v.slice(1, -1);
-                    }
-                    ver = normalizeImporterVersion(v);
-                }
-                i++;
-            }
-            if (pkgName && ver)
-                target.add(`${pkgName}@${ver}`);
-        }
-    }
-    let i = 0;
-    while (i < lines.length) {
-        const L = lines[i] ?? '';
-        if (L.match(/^ {4}dependencies:\s*$/)) {
-            i++;
-            parseDepBlock(prod);
-            continue;
-        }
-        if (L.match(/^ {4}devDependencies:\s*$/)) {
-            i++;
-            parseDepBlock(dev);
-            continue;
-        }
-        i++;
-    }
-    return { prod, dev };
-}
-function extractPnpmPackageKeys(content) {
-    const keys = [];
-    const lines = content.split(/\r?\n/);
-    let i = 0;
-    while (i < lines.length && !/^packages:\s*$/.test(lines[i] ?? ''))
-        i++;
-    if (i >= lines.length)
-        return keys;
-    i++;
-    while (i < lines.length) {
-        const line = lines[i] ?? '';
-        if (/^\S/.test(line) && line.trim().length > 0)
-            break;
-        const m = line.match(/^\s+(?:'([^']+)'|"([^"]+)"|([^:]+)):\s*$/);
-        if (m) {
-            const key = (m[1] ?? m[2] ?? m[3] ?? '').trim();
-            if (key)
-                keys.push(key);
-        }
-        i++;
-    }
-    return keys;
-}
-function parsePnpmLockfile(content) {
-    const pkgKeys = extractPnpmPackageKeys(content);
-    const { prod, dev } = collectPnpmImporterProdDev(content);
-    const out = [];
-    for (const rawKey of pkgKeys) {
-        const parsed = parsePnpmPackageKey(rawKey);
-        if (!parsed)
-            continue;
-        const composite = `${parsed.name}@${parsed.version}`;
-        const inImporter = prod.has(composite) || dev.has(composite);
-        const isDev = inImporter ? !prod.has(composite) && dev.has(composite) : false;
-        out.push({
-            name: parsed.name,
-            version: parsed.version,
-            isDev,
-        });
-    }
-    return (0, parse_npm_1.dedupeDependencies)(out);
-}
-
-
-/***/ }),
-
 /***/ 7353:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -30411,14 +30389,16 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(6966));
 const github = __importStar(__nccwpck_require__(4903));
+const path = __importStar(__nccwpck_require__(6760));
 const api_1 = __nccwpck_require__(7822);
 const build_payload_1 = __nccwpck_require__(1777);
 const detect_1 = __nccwpck_require__(4351);
-const parse_lockfile_1 = __nccwpck_require__(2743);
+const read_knip_files_1 = __nccwpck_require__(6723);
 const inputs_1 = __nccwpck_require__(5599);
+const ingest_body_1 = __nccwpck_require__(9022);
+const bundle_1 = __nccwpck_require__(906);
 const cve_1 = __nccwpck_require__(4988);
 const knip_1 = __nccwpck_require__(3770);
-const read_knip_files_1 = __nccwpck_require__(6723);
 const DEFAULT_API_URL = 'https://dev-herald.com/api/v1/health/ingest';
 function optionalString(v) {
     const t = v.trim();
@@ -30437,6 +30417,8 @@ async function run() {
         const commitSha = optionalString(core.getInput('commit-sha')) ??
             (typeof ctx.sha === 'string' && ctx.sha.length > 0 ? ctx.sha : undefined);
         const workflowRunUrl = optionalString(core.getInput('workflow-run-url'));
+        const turbopackBundleStatsPathRaw = core.getInput('turbopack-bundle-stats-path');
+        const bundleDataRaw = core.getInput('bundle-data');
         const inputsParsed = inputs_1.actionInputsSchema.safeParse({
             apiKey,
             knipReportPath: knipReportPathRaw,
@@ -30446,12 +30428,43 @@ async function run() {
             repositoryFullName,
             commitSha,
             workflowRunUrl,
+            turbopackBundleStatsPath: turbopackBundleStatsPathRaw,
+            bundleData: bundleDataRaw,
         });
         if (!inputsParsed.success) {
             const msg = inputsParsed.error.issues.map((i) => i.message).join('\n');
             throw new Error(msg);
         }
         const v = inputsParsed.data;
+        const workspaceRoot = process.env.GITHUB_WORKSPACE ?? process.cwd();
+        let bundle;
+        if (v.turbopackBundleStatsPath.length > 0) {
+            const statsPath = path.isAbsolute(v.turbopackBundleStatsPath)
+                ? v.turbopackBundleStatsPath
+                : path.join(workspaceRoot, v.turbopackBundleStatsPath);
+            const parsed = (0, bundle_1.parseNextjsBundleInput)(statsPath);
+            const validated = ingest_body_1.bundleSignalSchema.safeParse(parsed);
+            if (!validated.success) {
+                throw new Error(`Bundle stats produced invalid signal: ${validated.error.issues.map((i) => i.message).join('; ')}`);
+            }
+            bundle = validated.data;
+            core.info(`Bundle (Next.js): routes=${bundle.routes.length} jsBytes=${bundle.jsBytes} cssBytes=${bundle.cssBytes} totalBytes=${bundle.totalBytes}`);
+        }
+        else if (v.bundleData.length > 0) {
+            let raw;
+            try {
+                raw = JSON.parse(v.bundleData);
+            }
+            catch {
+                throw new Error('bundle-data is not valid JSON');
+            }
+            const validated = ingest_body_1.bundleSignalSchema.safeParse(raw);
+            if (!validated.success) {
+                throw new Error(`bundle-data validation failed: ${validated.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
+            }
+            bundle = validated.data;
+            core.info(`Bundle (raw JSON): routes=${bundle.routes.length} jsBytes=${bundle.jsBytes} cssBytes=${bundle.cssBytes} totalBytes=${bundle.totalBytes}`);
+        }
         let unusedCode;
         if (v.knipReportPath.length > 0) {
             const knipReport = (0, read_knip_files_1.readAndValidateKnipReport)(v.knipReportPath);
@@ -30459,17 +30472,20 @@ async function run() {
             core.info(`Unused code lists: files=${unusedCode.unusedFilesList.length}, deps=${unusedCode.unusedDepsList.length}, typeExports=${unusedCode.unusedTypeExportsList.length}`);
         }
         let cveAgg;
-        const workspaceRoot = process.env.GITHUB_WORKSPACE ?? process.cwd();
         const lockOverride = v.lockfilePath.length > 0 ? v.lockfilePath : undefined;
         try {
-            const detected = (0, detect_1.detectLockfile)(workspaceRoot, lockOverride);
-            if (detected.type === 'yarn' || detected.type === 'bun') {
-                core.warning(`CVE scanning supports npm and pnpm lockfiles only; detected ${detected.type} at ${detected.path}. Skipping OSV. Add pnpm-lock.yaml or package-lock.json, or set lockfile-path to one of those.`);
+            const detected = (0, detect_1.detectAdapter)(workspaceRoot, lockOverride);
+            if (!detected.adapter.supported) {
+                core.warning(`CVE scanning does not support ${detected.adapter.pmName} yet; lockfile at ${detected.lockfilePath}. Skipping OSV. Use pnpm-lock.yaml or package-lock.json, or set lockfile-path to one of those.`);
             }
             else {
-                const deps = (0, parse_lockfile_1.parseLockfile)(detected.type, detected.path);
-                core.info(`Lockfile ${detected.type}: ${detected.path} (${deps.length} packages)`);
-                cveAgg = await (0, cve_1.computeCveAggregates)(detected.type, deps, { detail: v.cveDetail });
+                const deps = await detected.adapter.listDeps(detected.lockfileDir, detected.lockfilePath);
+                core.info(`${detected.adapter.pmName}: ${detected.lockfilePath} (${deps.length} packages)`);
+                cveAgg = await (0, cve_1.computeCveAggregates)(deps, {
+                    detail: v.cveDetail,
+                    pmName: detected.adapter.pmName,
+                    osvEcosystem: detected.adapter.osvEcosystem,
+                });
                 core.info(`CVE: prod vulnerablePackages=${cveAgg.prod.packages.length} totalVulns=${cveAgg.prod.totalVulnerabilities}; dev vulnerablePackages=${cveAgg.dev.packages.length} totalVulns=${cveAgg.dev.totalVulnerabilities}`);
             }
         }
@@ -30479,12 +30495,13 @@ async function run() {
             }
             core.info(`CVE scan skipped: ${e instanceof Error ? e.message : String(e)}`);
         }
-        if (!unusedCode && !cveAgg) {
-            throw new Error('No knip report path provided and no lockfile found. Provide knip-report-path and/or a supported lockfile at the repository root.');
+        if (!unusedCode && !cveAgg && !bundle) {
+            throw new Error('No signals to send. Provide knip-report-path, a supported lockfile for CVE scanning, turbopack-bundle-stats-path (experimental-analyze --output dir or route-bundle-stats.json), and/or bundle-data.');
         }
         const payload = (0, build_payload_1.buildHealthIngestPayload)({
             unusedCode,
             cve: cveAgg,
+            bundle,
             repositoryFullName: v.repositoryFullName,
             commitSha: v.commitSha,
             workflowRunUrl: v.workflowRunUrl,
@@ -30655,7 +30672,7 @@ exports.osvVulnDetailSchema = zod_1.z
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.healthIngestRequestSchema = exports.healthSignalsSchema = exports.cveSignalsSchema = exports.cveEnvSignalSchema = exports.cvePackageSchema = exports.cveVulnerabilitySchema = exports.cveVulnSeverityLabelSchema = exports.cveEnvSeverityPartialSchema = exports.cveSeverityBucketsSchema = exports.unusedCodeSchema = void 0;
+exports.healthIngestRequestSchema = exports.healthSignalsSchema = exports.bundleSignalSchema = exports.bundleRouteSchema = exports.cveSignalsSchema = exports.cveEnvSignalSchema = exports.cvePackageSchema = exports.cveVulnerabilitySchema = exports.cveVulnSeverityLabelSchema = exports.cveEnvSeverityPartialSchema = exports.cveSeverityBucketsSchema = exports.unusedCodeSchema = void 0;
 const zod_1 = __nccwpck_require__(7151);
 exports.unusedCodeSchema = zod_1.z.object({
     unusedDepsList: zod_1.z.array(zod_1.z.string()),
@@ -30695,14 +30712,28 @@ exports.cveSignalsSchema = zod_1.z
     dev: exports.cveEnvSignalSchema,
 })
     .passthrough();
+exports.bundleRouteSchema = zod_1.z.object({
+    path: zod_1.z.string().min(1),
+    totalBytes: zod_1.z.number().int().min(0),
+    uncompressedBytes: zod_1.z.number().int().min(0).optional(),
+    compressedBytes: zod_1.z.number().int().min(0).optional(),
+    moduleCount: zod_1.z.number().int().min(0).optional(),
+});
+exports.bundleSignalSchema = zod_1.z.object({
+    totalBytes: zod_1.z.number().int().min(0),
+    jsBytes: zod_1.z.number().int().min(0),
+    cssBytes: zod_1.z.number().int().min(0),
+    routes: zod_1.z.array(exports.bundleRouteSchema),
+});
 exports.healthSignalsSchema = zod_1.z
     .object({
     unusedCode: exports.unusedCodeSchema.optional(),
     cve: exports.cveSignalsSchema.optional(),
+    bundle: exports.bundleSignalSchema.optional(),
 })
     .passthrough()
-    .refine((s) => s.unusedCode !== undefined || s.cve !== undefined, {
-    message: 'signals must include unusedCode (Knip) and/or cve',
+    .refine((s) => s.unusedCode !== undefined || s.cve !== undefined || s.bundle !== undefined, {
+    message: 'signals must include at least one of unusedCode (Knip), cve, or bundle',
 });
 exports.healthIngestRequestSchema = zod_1.z
     .object({
@@ -30758,6 +30789,20 @@ exports.actionInputsSchema = zod_1.z.object({
     repositoryFullName: zod_1.z.string().optional(),
     commitSha: zod_1.z.string().optional(),
     workflowRunUrl: zod_1.z.string().optional(),
+    turbopackBundleStatsPath: zod_1.z
+        .string()
+        .optional()
+        .default('')
+        .transform((s) => s.trim()),
+    bundleData: zod_1.z
+        .string()
+        .optional()
+        .default('')
+        .transform((s) => s.trim()),
+})
+    .refine((d) => !(d.turbopackBundleStatsPath.length > 0 && d.bundleData.length > 0), {
+    message: 'Provide only one of turbopack-bundle-stats-path or bundle-data, not both',
+    path: ['turbopackBundleStatsPath'],
 });
 
 
@@ -30787,6 +30832,317 @@ exports.knipReportSchema = zod_1.z
     files: zod_1.z.array(zod_1.z.string()).optional(),
 })
     .passthrough();
+
+
+/***/ }),
+
+/***/ 906:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.findDotNextDir = findDotNextDir;
+exports.parseNextjsExperimentalAnalyzeOutput = parseNextjsExperimentalAnalyzeOutput;
+exports.parseNextjsBundleInput = parseNextjsBundleInput;
+exports.parseNextjsBundleStats = parseNextjsBundleStats;
+const fs = __importStar(__nccwpck_require__(3024));
+const path = __importStar(__nccwpck_require__(6760));
+const zlib = __importStar(__nccwpck_require__(8522));
+function findDotNextDir(statsFilePath) {
+    const resolved = path.resolve(statsFilePath);
+    const segments = resolved.split(path.sep);
+    const idx = segments.lastIndexOf('.next');
+    if (idx < 0) {
+        return path.resolve('.next');
+    }
+    return segments.slice(0, idx + 1).join(path.sep);
+}
+function normalizeChunkRelative(chunkPath) {
+    let rel = chunkPath.replace(/\\/g, '/');
+    if (rel.startsWith('./')) {
+        rel = rel.slice(2);
+    }
+    if (rel.startsWith('.next/')) {
+        rel = rel.slice('.next/'.length);
+    }
+    return rel;
+}
+function resolveChunkFile(dotNextDir, chunkPath) {
+    return path.join(dotNextDir, ...normalizeChunkRelative(chunkPath).split('/'));
+}
+function isFile(p) {
+    try {
+        return fs.statSync(p).isFile();
+    }
+    catch {
+        return false;
+    }
+}
+function fileSize(p) {
+    return fs.statSync(p).size;
+}
+function gzipLength(p) {
+    const buf = fs.readFileSync(p);
+    return zlib.gzipSync(buf).length;
+}
+function parseAnalyzeDataFile(filePath) {
+    const buf = fs.readFileSync(filePath);
+    const s = buf.toString('utf8');
+    const start = s.indexOf('{');
+    if (start < 0) {
+        throw new Error(`No JSON object in ${filePath}`);
+    }
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = start; i < s.length; i++) {
+        const ch = s[i];
+        if (escape) {
+            escape = false;
+            continue;
+        }
+        if (ch === '\\' && inString) {
+            escape = true;
+            continue;
+        }
+        if (ch === '"' && !escape) {
+            inString = !inString;
+            continue;
+        }
+        if (inString)
+            continue;
+        if (ch === '{')
+            depth++;
+        else if (ch === '}') {
+            depth--;
+            if (depth === 0) {
+                return JSON.parse(s.slice(start, i + 1));
+            }
+        }
+    }
+    throw new Error(`Unclosed JSON in ${filePath}`);
+}
+function aggregateAnalyzeRoute(json) {
+    const { output_files, chunk_parts } = json;
+    const byIndexRaw = new Array(output_files.length).fill(0);
+    const byIndexGz = new Array(output_files.length).fill(0);
+    for (const part of chunk_parts) {
+        const i = part.output_file_index;
+        if (i < 0 || i >= output_files.length)
+            continue;
+        byIndexRaw[i] += part.size;
+        byIndexGz[i] += part.compressed_size;
+    }
+    const byFile = new Map();
+    let raw = 0;
+    let gz = 0;
+    for (let i = 0; i < output_files.length; i++) {
+        const name = output_files[i].filename;
+        raw += byIndexRaw[i];
+        gz += byIndexGz[i];
+        byFile.set(name, { raw: byIndexRaw[i], gz: byIndexGz[i] });
+    }
+    return { raw, gz, byFile };
+}
+function routePathToAnalyzeDataPath(dataDir, route) {
+    if (route === '/') {
+        return path.join(dataDir, 'analyze.data');
+    }
+    const seg = route.replace(/^\//, '');
+    return path.join(dataDir, seg, 'analyze.data');
+}
+/**
+ * Parse next experimental-analyze --output tree (.next/diagnostics/analyze) into the bundle ingest shape.
+ * Reads data/routes.json and per-route analyze.data files emitted by Next.js.
+ */
+function parseNextjsExperimentalAnalyzeOutput(analyzeDir) {
+    const dataDir = path.join(analyzeDir, 'data');
+    const routesPath = path.join(dataDir, 'routes.json');
+    if (!isFile(routesPath)) {
+        throw new Error(`Expected ${routesPath} from experimental-analyze output. Run: pnpm next experimental-analyze --output`);
+    }
+    const routesList = JSON.parse(fs.readFileSync(routesPath, 'utf8'));
+    if (!Array.isArray(routesList) || !routesList.every((r) => typeof r === 'string')) {
+        throw new Error('routes.json must be a JSON array of route strings');
+    }
+    const routes = [];
+    const globalFileBytes = new Map();
+    for (const route of routesList) {
+        const analyzePath = routePathToAnalyzeDataPath(dataDir, route);
+        if (!isFile(analyzePath))
+            continue;
+        const json = parseAnalyzeDataFile(analyzePath);
+        const { raw, gz, byFile } = aggregateAnalyzeRoute(json);
+        routes.push({
+            path: route,
+            totalBytes: raw,
+            uncompressedBytes: raw,
+            compressedBytes: gz,
+            moduleCount: json.sources?.length ?? json.output_files.length,
+        });
+        for (const [filename, { raw: fraw }] of byFile) {
+            const isJs = filename.endsWith('.js') || filename.endsWith('.mjs') || filename.endsWith('.cjs');
+            const isCss = filename.endsWith('.css');
+            if (!isJs && !isCss)
+                continue;
+            const prev = globalFileBytes.get(filename);
+            if (!prev) {
+                globalFileBytes.set(filename, { raw: fraw, isJs, isCss });
+            }
+        }
+    }
+    let jsBytes = 0;
+    let cssBytes = 0;
+    for (const v of globalFileBytes.values()) {
+        if (v.isJs)
+            jsBytes += v.raw;
+        else if (v.isCss)
+            cssBytes += v.raw;
+    }
+    return {
+        totalBytes: jsBytes + cssBytes,
+        jsBytes,
+        cssBytes,
+        routes,
+    };
+}
+/**
+ * Resolve bundle input: either route-bundle-stats.json or a next experimental-analyze --output directory.
+ */
+function parseNextjsBundleInput(resolvedPath) {
+    let st;
+    try {
+        st = fs.statSync(resolvedPath);
+    }
+    catch {
+        throw new Error(`Bundle path not found: ${resolvedPath}`);
+    }
+    if (st.isDirectory()) {
+        return parseNextjsExperimentalAnalyzeOutput(resolvedPath);
+    }
+    const raw = fs.readFileSync(resolvedPath, 'utf8');
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    }
+    catch {
+        throw new Error(`Bundle file is not valid JSON: ${resolvedPath}`);
+    }
+    if (Array.isArray(parsed)) {
+        return parseNextjsBundleStats(resolvedPath);
+    }
+    throw new Error(`Expected a JSON array (route-bundle-stats.json) or a directory from next experimental-analyze --output: ${resolvedPath}`);
+}
+/**
+ * Parse Turbopack route-bundle-stats.json into the Dev Herald bundle ingest shape.
+ * Expects chunk files to exist on disk under the inferred .next directory.
+ */
+function parseNextjsBundleStats(statsPath) {
+    const raw = fs.readFileSync(statsPath, 'utf8');
+    const stats = JSON.parse(raw);
+    if (!Array.isArray(stats)) {
+        throw new Error('Expected Turbopack route-bundle-stats.json to be a JSON array');
+    }
+    const entries = stats;
+    const dotNextDir = findDotNextDir(statsPath);
+    const routesWithContent = entries.filter((e) => typeof e.route === 'string' && e.route.length > 0 && (e.firstLoadUncompressedJsBytes ?? 0) > 0);
+    const allChunkSets = routesWithContent.map((e) => new Set((e.firstLoadChunkPaths ?? []).filter((c) => c.endsWith('.js'))));
+    const sharedJsChunks = new Set();
+    if (allChunkSets.length > 0) {
+        for (const chunk of allChunkSets[0]) {
+            if (allChunkSets.every((s) => s.has(chunk))) {
+                sharedJsChunks.add(chunk);
+            }
+        }
+    }
+    const jsChunkPaths = new Set();
+    const cssChunkPaths = new Set();
+    for (const e of entries) {
+        for (const c of e.firstLoadChunkPaths ?? []) {
+            if (c.endsWith('.js'))
+                jsChunkPaths.add(c);
+            else if (c.endsWith('.css'))
+                cssChunkPaths.add(c);
+        }
+    }
+    let jsBytes = 0;
+    for (const c of jsChunkPaths) {
+        const abs = resolveChunkFile(dotNextDir, c);
+        if (isFile(abs)) {
+            jsBytes += fileSize(abs);
+        }
+    }
+    let cssBytes = 0;
+    for (const c of cssChunkPaths) {
+        const abs = resolveChunkFile(dotNextDir, c);
+        if (isFile(abs)) {
+            cssBytes += fileSize(abs);
+        }
+    }
+    const routes = [];
+    for (const entry of routesWithContent) {
+        const routePath = entry.route;
+        const uncompressed = entry.firstLoadUncompressedJsBytes ?? 0;
+        let compressed = 0;
+        for (const chunk of entry.firstLoadChunkPaths ?? []) {
+            if (!chunk.endsWith('.js'))
+                continue;
+            if (sharedJsChunks.has(chunk))
+                continue;
+            const abs = resolveChunkFile(dotNextDir, chunk);
+            if (isFile(abs)) {
+                compressed += gzipLength(abs);
+            }
+        }
+        routes.push({
+            path: routePath,
+            totalBytes: uncompressed,
+            uncompressedBytes: uncompressed,
+            compressedBytes: compressed,
+            moduleCount: (entry.firstLoadChunkPaths ?? []).length,
+        });
+    }
+    return {
+        totalBytes: jsBytes + cssBytes,
+        jsBytes,
+        cssBytes,
+        routes,
+    };
+}
 
 
 /***/ }),
@@ -31016,13 +31372,13 @@ function sparseSeverityInstanceCounts(packages) {
     }
     return Object.keys(out).length > 0 ? out : undefined;
 }
-async function computeCveAggregates(lockfileType, dependencies, options) {
+async function computeCveAggregates(dependencies, options) {
     const prodIdx = [];
     const devIdx = [];
     dependencies.forEach((d, i) => (d.isDev ? devIdx : prodIdx).push(i));
     const orderedDeps = [...prodIdx.map((i) => dependencies[i]), ...devIdx.map((i) => dependencies[i])];
     const queries = orderedDeps.map((d) => ({
-        package: { name: d.name, ecosystem: 'npm' },
+        package: { name: d.name, ecosystem: options.osvEcosystem },
         version: d.version,
     }));
     const results = await osvQueryBatchAll(queries);
@@ -31047,7 +31403,7 @@ async function computeCveAggregates(lockfileType, dependencies, options) {
         devSeverity = sparseSeverityInstanceCounts(devPackages);
     }
     return {
-        lockfileType,
+        lockfileType: options.pmName,
         prod: {
             totalVulnerabilities: totalVulnCount(prodPackages),
             packages: prodPackages,
@@ -31246,6 +31602,22 @@ module.exports = require("node:events");
 
 /***/ }),
 
+/***/ 3024:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:fs");
+
+/***/ }),
+
+/***/ 6760:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:path");
+
+/***/ }),
+
 /***/ 7075:
 /***/ ((module) => {
 
@@ -31259,6 +31631,14 @@ module.exports = require("node:stream");
 
 "use strict";
 module.exports = require("node:util");
+
+/***/ }),
+
+/***/ 8522:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:zlib");
 
 /***/ }),
 
