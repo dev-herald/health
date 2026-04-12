@@ -7,7 +7,7 @@ import { detectAdapter } from './lockfile/detect';
 import { readAndValidateKnipReport } from './read-knip-files';
 import { actionInputsSchema } from './schemas/inputs';
 import { bundleSignalSchema, type BundleSignal } from './schemas/ingest-body';
-import { parseNextjsBundleInput } from './signals/bundle';
+import { parseBundleStatsInput } from './signals/bundle';
 import { computeCveAggregates } from './signals/cve';
 import { mapKnipReportToSignals } from './signals/knip';
 import type { IngestSuccessData } from './types';
@@ -35,7 +35,7 @@ async function run(): Promise<void> {
       optionalString(core.getInput('commit-sha')) ??
       (typeof ctx.sha === 'string' && ctx.sha.length > 0 ? ctx.sha : undefined);
     const workflowRunUrl = optionalString(core.getInput('workflow-run-url'));
-    const turbopackBundleStatsPathRaw = core.getInput('turbopack-bundle-stats-path');
+    const bundleStatsPathRaw = core.getInput('bundle-stats-path');
 
     const inputsParsed = actionInputsSchema.safeParse({
       apiKey,
@@ -46,7 +46,7 @@ async function run(): Promise<void> {
       repositoryFullName,
       commitSha,
       workflowRunUrl,
-      turbopackBundleStatsPath: turbopackBundleStatsPathRaw,
+      bundleStatsPath: bundleStatsPathRaw,
     });
 
     if (!inputsParsed.success) {
@@ -58,11 +58,11 @@ async function run(): Promise<void> {
     const workspaceRoot = process.env.GITHUB_WORKSPACE ?? process.cwd();
 
     let bundle: BundleSignal | undefined;
-    if (v.turbopackBundleStatsPath.length > 0) {
-      const statsPath = path.isAbsolute(v.turbopackBundleStatsPath)
-        ? v.turbopackBundleStatsPath
-        : path.join(workspaceRoot, v.turbopackBundleStatsPath);
-      const parsed = parseNextjsBundleInput(statsPath);
+    if (v.bundleStatsPath.length > 0) {
+      const statsPath = path.isAbsolute(v.bundleStatsPath)
+        ? v.bundleStatsPath
+        : path.join(workspaceRoot, v.bundleStatsPath);
+      const parsed = parseBundleStatsInput(statsPath);
       const validated = bundleSignalSchema.safeParse(parsed);
       if (!validated.success) {
         throw new Error(
@@ -114,7 +114,7 @@ async function run(): Promise<void> {
 
     if (!unusedCode && !cveAgg && !bundle) {
       throw new Error(
-        'No signals to send. Provide knip-report-path, a supported lockfile for CVE scanning, and/or turbopack-bundle-stats-path (Next bundle / analyze output).'
+        'No signals to send. Provide knip-report-path, a supported lockfile for CVE scanning, and/or bundle-stats-path (bundle analysis output).'
       );
     }
 

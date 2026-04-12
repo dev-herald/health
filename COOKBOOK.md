@@ -53,7 +53,7 @@
         uses: dev-herald/health@v1
         with:
           api-key: ${{ secrets.DEV_HERALD_KEY }}
-          turbopack-bundle-stats-path: apps/web/.next/diagnostics/analyze
+          bundle-stats-path: apps/web/.next/diagnostics/analyze
           workflow-run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 ```
 
@@ -78,7 +78,7 @@
         uses: dev-herald/health@v1
         with:
           api-key: ${{ secrets.DEV_HERALD_KEY }}
-          turbopack-bundle-stats-path: apps/web/.next/analyze
+          bundle-stats-path: apps/web/.next/analyze
           workflow-run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 ```
 

@@ -30,7 +30,7 @@ export const actionInputsSchema = z.object({
   repositoryFullName: z.string().optional(),
   commitSha: z.string().optional(),
   workflowRunUrl: z.string().optional(),
-  turbopackBundleStatsPath: z
+  bundleStatsPath: z
     .string()
     .optional()
     .default('')

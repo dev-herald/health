@@ -41,8 +41,8 @@ inputs:
     description: 'Link to the workflow run'
     required: false
 
-  turbopack-bundle-stats-path:
-    description: 'Path to a Next bundle artifact: experimental-analyze --output dir (.next/diagnostics/analyze), webpack @next/bundle-analyzer output dir with client.json (analyzerMode json), route-bundle-stats.json (Turbopack), or a single webpack-bundle-analyzer JSON file'
+  bundle-stats-path:
+    description: 'Path to bundle analysis output (file or directory). Supported today: Next.js experimental-analyze --output dir, Turbopack route-bundle-stats.json, @next/bundle-analyzer dir (e.g. .next/analyze with client.json) or a single webpack-bundle-analyzer JSON file. Plain Webpack and Vite artifacts will use the same input as parsers are added.'
     required: false
     default: ''
 

@@ -43,13 +43,13 @@ describe('actionInputsSchema', () => {
     expect(r.success).toBe(false);
   });
 
-  it('accepts turbopack-bundle-stats-path', () => {
+  it('accepts bundle-stats-path', () => {
     const r = actionInputsSchema.safeParse({
       ...base,
       knipReportPath: '',
-      turbopackBundleStatsPath: '.next/analyze',
+      bundleStatsPath: '.next/analyze',
     });
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.turbopackBundleStatsPath).toBe('.next/analyze');
+    if (r.success) expect(r.data.bundleStatsPath).toBe('.next/analyze');
   });
 });

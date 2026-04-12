@@ -1,10 +1,8 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import { readFileSync } from 'fs';
 import type { Dependency } from '../types';
 import type { EcosystemAdapter } from '../adapter';
 import { dedupeDependencies } from '../parse-npm';
-
-const execFileAsync = promisify(execFile);
+import { parsePnpmLockfile } from '../parse-pnpm';
 
 interface PnpmListDep {
   from?: string;
@@ -42,8 +40,8 @@ function collectDepKeys(
 }
 
 /**
- * Converts the array emitted by `pnpm list --json --depth Infinity --lockfile-only`
- * into a flat `Dependency[]`.  Exported for unit testing without running pnpm.
+ * Converts `pnpm list --json` style trees into a flat `Dependency[]`.
+ * Used for unit tests; production code parses `pnpm-lock.yaml` directly (see `parse-pnpm.ts`).
  *
  * Prod wins: if a package is reachable from both a `dependencies` subtree and a
  * `devDependencies` subtree (across all workspaces), it is classified as prod.
@@ -72,32 +70,10 @@ export const pnpmAdapter: EcosystemAdapter = {
   osvEcosystem: 'npm',
   supported: true,
 
-  async listDeps(lockfileDir: string, _lockfilePath: string): Promise<Dependency[]> {
-    // Single run: JSON already splits prod vs dev per workspace (`dependencies` vs
-    // `devDependencies`). No second `pnpm list --prod` pass — we classify from that tree.
-    let stdout: string;
-    try {
-      ({ stdout } = await execFileAsync(
-        'pnpm',
-        ['list', '--json', '--depth', 'Infinity', '--lockfile-only'],
-        { cwd: lockfileDir, maxBuffer: 50 * 1024 * 1024 }
-      ));
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`pnpm list failed: ${msg}`);
-    }
-
-    let raw: unknown;
-    try {
-      raw = JSON.parse(stdout);
-    } catch {
-      throw new Error('pnpm list: failed to parse JSON output');
-    }
-
-    if (!Array.isArray(raw)) {
-      throw new Error('pnpm list: expected JSON array output');
-    }
-
-    return flattenPnpmListOutput(raw as PnpmListWorkspace[]);
+  async listDeps(_lockfileDir: string, lockfilePath: string): Promise<Dependency[]> {
+    // Parse the lockfile directly so CVE/OSV works without `pnpm` on PATH and without
+    // `pnpm list --lockfile-only` (requires pnpm ≥ 10.23). Mirrors the npm adapter.
+    const content = readFileSync(lockfilePath, 'utf8');
+    return parsePnpmLockfile(content);
   },
 };

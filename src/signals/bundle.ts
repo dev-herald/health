@@ -393,6 +393,13 @@ export function parseNextjsBundleInput(resolvedPath: string): BundleSignal {
 }
 
 /**
+ * Entry point for `bundle-stats-path`: dispatches by artifact shape (Next.js, webpack-bundle-analyzer; Vite and other stacks later).
+ */
+export function parseBundleStatsInput(resolvedPath: string): BundleSignal {
+  return parseNextjsBundleInput(resolvedPath);
+}
+
+/**
  * Parse Turbopack route-bundle-stats.json into the Dev Herald bundle ingest shape.
  * Expects chunk files to exist on disk under the inferred .next directory.
  */

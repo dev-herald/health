@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildHealthIngestPayload } from '../../build-payload';
 import { bundleSignalSchema, healthIngestRequestSchema } from '../../schemas/ingest-body';
-import { parseNextjsBundleInput } from '../../signals/bundle';
+import { parseBundleStatsInput } from '../../signals/bundle';
 
 /** Turbopack: `next experimental-analyze --output` → `.next/diagnostics/analyze`. */
 export const BUNDLE_EXPERIMENTAL_ANALYZE_FIXTURES = [
@@ -32,8 +32,8 @@ for (const fixture of BUNDLE_EXPERIMENTAL_ANALYZE_FIXTURES) {
   const hasArtifacts = fs.existsSync(path.join(analyzeDir, 'data', 'routes.json'));
 
   describe.skipIf(!hasArtifacts)(`bundle integration: ${fixture.name} (experimental-analyze)`, () => {
-    it('parseNextjsBundleInput → bundleSignalSchema → buildHealthIngestPayload', () => {
-      const bundle = parseNextjsBundleInput(analyzeDir);
+    it('parseBundleStatsInput → bundleSignalSchema → buildHealthIngestPayload', () => {
+      const bundle = parseBundleStatsInput(analyzeDir);
 
       const parsed = bundleSignalSchema.safeParse(bundle);
       expect(parsed.success, parsed.success ? '' : JSON.stringify(parsed.error.format())).toBe(true);
@@ -61,8 +61,8 @@ for (const fixture of WEBPACK_BUNDLE_ANALYZER_FIXTURES) {
   const hasArtifacts = fs.existsSync(path.join(analyzeDir, 'client.json'));
 
   describe.skipIf(!hasArtifacts)(`bundle integration: ${fixture.name} (webpack bundle-analyzer JSON)`, () => {
-    it('parseNextjsBundleInput → bundleSignalSchema → buildHealthIngestPayload', () => {
-      const bundle = parseNextjsBundleInput(analyzeDir);
+    it('parseBundleStatsInput → bundleSignalSchema → buildHealthIngestPayload', () => {
+      const bundle = parseBundleStatsInput(analyzeDir);
 
       const parsed = bundleSignalSchema.safeParse(bundle);
       expect(parsed.success, parsed.success ? '' : JSON.stringify(parsed.error.format())).toBe(true);
