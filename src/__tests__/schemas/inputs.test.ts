@@ -43,6 +43,19 @@ describe('actionInputsSchema', () => {
     expect(r.success).toBe(false);
   });
 
+  it('trims initiative inputs', () => {
+    const r = actionInputsSchema.safeParse({
+      ...base,
+      initiatives: '  legacy-sdk:\n    calls: 1\n',
+      initiativesPath: '  counts.json  ',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.initiatives).toBe('legacy-sdk:\n    calls: 1');
+      expect(r.data.initiativesPath).toBe('counts.json');
+    }
+  });
+
   it('accepts bundle-stats-path', () => {
     const r = actionInputsSchema.safeParse({
       ...base,

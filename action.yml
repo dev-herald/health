@@ -46,12 +46,22 @@ inputs:
     required: false
     default: ''
 
+  initiatives:
+    description: 'YAML or JSON map of initiative slug to metric counts. Copy each slug and metric key from the initiative in the dashboard. Keys differ per initiative. Example: `emotion-to-panda: { files: 12, usages: 96 }` and `drop-ts-ignore: { directives: 40 }` in the same map. Omit to skip measurements. Set this or initiatives-path, not both.'
+    required: false
+    default: ''
+
+  initiatives-path:
+    description: 'Path to a JSON or YAML file with the same map as initiatives (slug to metric key to count). Relative paths are from the workspace root. Set this or initiatives, not both.'
+    required: false
+    default: ''
+
 outputs:
   report-id:
     description: 'Health report ID'
 
   status:
-    description: 'created or failed'
+    description: 'created when a health report was created, measured when the run only sent initiative counts, or failed'
 
 runs:
   using: 'node20'

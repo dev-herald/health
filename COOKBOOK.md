@@ -83,3 +83,68 @@
 ```
 
 `next.config` must enable `@next/bundle-analyzer` with `analyzerMode: 'json'` (and typically `openAnalyzer: false` in CI) so `.next/analyze/client.json` exists.
+
+## Initiatives
+
+Metric keys are whatever you defined on the initiative. These two snippets use different keys on purpose.
+
+Emotion migration (`files` and `usages` are that initiative's keys):
+
+```yaml
+      - name: Count Emotion usage
+        id: emotion
+        run: |
+          {
+            echo "files=$(rg -l '@emotion' -g '*.tsx' -g '*.ts' | wc -l | tr -d ' ')"
+            echo "usages=$(rg -o '@emotion' -g '*.tsx' -g '*.ts' | wc -l | tr -d ' ')"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload health data to Dev Herald
+        uses: dev-herald/health@v1
+        with:
+          api-key: ${{ secrets.DEV_HERALD_KEY }}
+          initiatives: |
+            emotion-to-panda:
+              files: ${{ steps.emotion.outputs.files }}
+              usages: ${{ steps.emotion.outputs.usages }}
+          workflow-run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+```
+
+`@ts-ignore` cleanup (the only metric key is `directives`):
+
+```yaml
+      - name: Count ts-ignore directives
+        id: ts-ignore
+        run: |
+          echo "directives=$(rg -o '@ts-ignore' -g '*.ts' -g '*.tsx' | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Upload health data to Dev Herald
+        uses: dev-herald/health@v1
+        with:
+          api-key: ${{ secrets.DEV_HERALD_KEY }}
+          initiatives: |
+            drop-ts-ignore:
+              directives: ${{ steps.ts-ignore.outputs.directives }}
+```
+
+Same map from a file a script already wrote:
+
+```yaml
+      - name: Write initiative counts
+        run: node scripts/initiative-counts.mjs > initiative-counts.json
+
+      - name: Upload health data to Dev Herald
+        uses: dev-herald/health@v1
+        with:
+          api-key: ${{ secrets.DEV_HERALD_KEY }}
+          initiatives-path: initiative-counts.json
+```
+
+`initiative-counts.json`:
+
+```json
+{
+  "emotion-to-panda": { "files": 12, "usages": 96 },
+  "drop-ts-ignore": { "directives": 40 }
+}
+```

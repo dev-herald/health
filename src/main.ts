@@ -3,6 +3,9 @@ import * as github from '@actions/github';
 import * as path from 'node:path';
 import { buildHeaders, makeHttpRequest } from './api';
 import { buildHealthIngestPayload } from './build-payload';
+import { buildMeasurementsPayload } from './initiatives/payload';
+import { loadInitiativeCounts } from './initiatives/parse';
+import { measurementsUrl } from './initiatives/url';
 import { detectAdapter } from './lockfile/detect';
 import { readAndValidateKnipReport } from './read-knip-files';
 import { actionInputsSchema } from './schemas/inputs';
@@ -36,6 +39,8 @@ async function run(): Promise<void> {
       (typeof ctx.sha === 'string' && ctx.sha.length > 0 ? ctx.sha : undefined);
     const workflowRunUrl = optionalString(core.getInput('workflow-run-url'));
     const bundleStatsPathRaw = core.getInput('bundle-stats-path');
+    const initiativesRaw = core.getInput('initiatives');
+    const initiativesPathRaw = core.getInput('initiatives-path');
 
     const inputsParsed = actionInputsSchema.safeParse({
       apiKey,
@@ -47,6 +52,8 @@ async function run(): Promise<void> {
       commitSha,
       workflowRunUrl,
       bundleStatsPath: bundleStatsPathRaw,
+      initiatives: initiativesRaw,
+      initiativesPath: initiativesPathRaw,
     });
 
     if (!inputsParsed.success) {
@@ -112,54 +119,93 @@ async function run(): Promise<void> {
       core.info(`CVE scan skipped: ${e instanceof Error ? e.message : String(e)}`);
     }
 
-    if (!unusedCode && !cveAgg && !bundle) {
+    const initiativesPath =
+      v.initiativesPath.length > 0
+        ? path.isAbsolute(v.initiativesPath)
+          ? v.initiativesPath
+          : path.join(workspaceRoot, v.initiativesPath)
+        : '';
+    const initiatives = loadInitiativeCounts(v.initiatives, initiativesPath);
+    if (initiatives) {
+      for (const [slug, metrics] of Object.entries(initiatives)) {
+        const parts = Object.entries(metrics)
+          .map(([key, count]) => `${key}=${count}`)
+          .join(' ');
+        core.info(`${slug}: ${parts}`);
+      }
+    }
+
+    if (!unusedCode && !cveAgg && !bundle && !initiatives) {
       throw new Error(
-        'No signals to send. Provide knip-report-path, a supported lockfile for CVE scanning, and/or bundle-stats-path (bundle analysis output).'
+        'No signals to send. Provide knip-report-path, a supported lockfile for CVE scanning, bundle-stats-path, and/or initiatives (or initiatives-path).'
       );
     }
 
-    const payload = buildHealthIngestPayload({
-      unusedCode,
-      cve: cveAgg,
-      bundle,
-      repositoryFullName: v.repositoryFullName,
-      commitSha: v.commitSha,
-      workflowRunUrl: v.workflowRunUrl,
-    });
-
-    core.info(`POST ${v.apiUrl}`);
-
+    const timestamp = new Date().toISOString();
     const headers = buildHeaders(v.apiKey);
-    const response = await makeHttpRequest(v.apiUrl, 'POST', headers, payload as Record<string, unknown>);
+    let createdHealthReport = false;
 
-    let json: unknown;
-    try {
-      json = JSON.parse(response.data) as unknown;
-    } catch {
-      json = null;
+    if (unusedCode || cveAgg || bundle) {
+      const payload = buildHealthIngestPayload({
+        unusedCode,
+        cve: cveAgg,
+        bundle,
+        repositoryFullName: v.repositoryFullName,
+        commitSha: v.commitSha,
+        workflowRunUrl: v.workflowRunUrl,
+        timestamp,
+      });
+
+      core.info(`POST ${v.apiUrl}`);
+      const response = await makeHttpRequest(v.apiUrl, 'POST', headers, payload as Record<string, unknown>);
+
+      let json: unknown;
+      try {
+        json = JSON.parse(response.data) as unknown;
+      } catch {
+        json = null;
+      }
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        const bodyPreview = response.data.slice(0, 2000);
+        throw new Error(`Ingest failed (${response.statusCode}): ${bodyPreview}`);
+      }
+
+      const data =
+        json &&
+        typeof json === 'object' &&
+        json !== null &&
+        'data' in json &&
+        typeof (json as { data: unknown }).data === 'object' &&
+        (json as { data: unknown }).data !== null
+          ? (json as { data: IngestSuccessData }).data
+          : null;
+
+      const reportId = data && typeof data.reportId === 'string' ? data.reportId : undefined;
+      if (reportId) {
+        core.setOutput('report-id', reportId);
+      }
+      createdHealthReport = true;
+      core.info(`Health report created${reportId ? `: ${reportId}` : ''}`);
     }
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      const bodyPreview = response.data.slice(0, 2000);
-      throw new Error(`Ingest failed (${response.statusCode}): ${bodyPreview}`);
+    if (initiatives) {
+      const measurements = buildMeasurementsPayload({
+        timestamp,
+        commitSha: v.commitSha,
+        initiatives,
+      });
+      const url = measurementsUrl(v.apiUrl);
+      core.info(`POST ${url}`);
+      const response = await makeHttpRequest(url, 'POST', headers, measurements as Record<string, unknown>);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        const bodyPreview = response.data.slice(0, 2000);
+        throw new Error(`Initiative measurements failed (${response.statusCode}): ${bodyPreview}`);
+      }
+      core.info('Initiative measurements recorded');
     }
 
-    const data =
-      json &&
-      typeof json === 'object' &&
-      json !== null &&
-      'data' in json &&
-      typeof (json as { data: unknown }).data === 'object' &&
-      (json as { data: unknown }).data !== null
-        ? (json as { data: IngestSuccessData }).data
-        : null;
-
-    const reportId = data && typeof data.reportId === 'string' ? data.reportId : undefined;
-    if (reportId) {
-      core.setOutput('report-id', reportId);
-    }
-    core.setOutput('status', 'created');
-    core.info(`Health report created${reportId ? `: ${reportId}` : ''}`);
+    core.setOutput('status', createdHealthReport ? 'created' : 'measured');
   } catch (e) {
     core.setOutput('status', 'failed');
     if (e instanceof Error) {

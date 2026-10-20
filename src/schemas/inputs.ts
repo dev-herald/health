@@ -35,6 +35,16 @@ export const actionInputsSchema = z.object({
     .optional()
     .default('')
     .transform((s) => s.trim()),
+  initiatives: z
+    .string()
+    .optional()
+    .default('')
+    .transform((s) => s.trim()),
+  initiativesPath: z
+    .string()
+    .optional()
+    .default('')
+    .transform((s) => s.trim()),
 });
 
 export type ActionInputsValidated = z.infer<typeof actionInputsSchema>;

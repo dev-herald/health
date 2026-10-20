@@ -70,6 +70,38 @@ Knip is just one example - Dev Herald is designed to support multiple signals ov
 | `repository-full-name` | Optional override                                                                                                                                                                       |
 | `commit-sha`           | Optional override                                                                                                                                                                       |
 | `workflow-run-url`     | Link to CI run                                                                                                                                                                          |
+| `initiatives`          | YAML or JSON map of initiative slug to metric key to count. Keys come from each initiative in the dashboard and differ per initiative.                                                                 |
+| `initiatives-path`     | Path to a JSON or YAML file with that same map. Set this or `initiatives`, not both.                                                                                                    |
+
+
+### Initiatives
+
+Initiatives are long-running counts you define (affected files, remaining call sites, skipped tests, workspaces still on an old build). Your workflow counts them. This action sends the numbers.
+
+Copy the slug and each metric key from the initiative. Send every key that initiative defines. A key named `files` on one initiative has nothing to do with a key named `directives` on another.
+
+```yaml
+- id: measure
+  run: |
+    {
+      echo "directives=$(rg -o '@ts-ignore' -g '*.ts' -g '*.tsx' | wc -l | tr -d ' ')"
+      echo "workspaces=$(node scripts/count-old-workspaces.mjs)"
+    } >> "$GITHUB_OUTPUT"
+
+- name: Upload health data
+  uses: dev-herald/health@v1
+  with:
+    api-key: ${{ secrets.DEV_HERALD_KEY }}
+    initiatives: |
+      drop-ts-ignore:
+        directives: ${{ steps.measure.outputs.directives }}
+      old-build:
+        workspaces: ${{ steps.measure.outputs.workspaces }}
+```
+
+The action POSTs those counts to `POST /api/v1/initiatives/measurements` on the same host as `api-url`. `commit-sha` is required for that request and defaults to the GitHub commit. Sending the same commit again replaces that snapshot.
+
+When this step also uploads a health report, the report is sent first and both requests share one timestamp. A run that only sends initiatives sets the `status` output to `measured`. A run that creates a health report still sets `status` to `created`.
 
 
 When CVE scanning runs (npm or pnpm lockfile), the ingest payload includes `signals.cve` with `prod` / `dev` sections: `totalVulnerabilities`, a `packages` list (`name`, `version`, `vulnerabilities[]` with at least `id`), and optionally `severity` summary counts when `cve-detail` is enabled.
@@ -80,6 +112,6 @@ When CVE scanning runs (npm or pnpm lockfile), the ingest payload includes `sign
 | Output      | Description                 |
 | ----------- | --------------------------- |
 | `report-id` | Dev Herald health report id |
-| `status`    | created or failed           |
+| `status`    | `created` when a health report was created, `measured` when the run only sent initiative counts, or `failed` |
 
 

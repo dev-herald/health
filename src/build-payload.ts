@@ -14,6 +14,7 @@ export interface BuildPayloadOptions {
   commitSha?: string;
   workflowRunUrl?: string;
   schemaVersion?: number;
+  timestamp?: string;
 }
 
 function cveToPayloadShape(c: CveAggregates): NonNullable<HealthIngestRequest['signals']['cve']> {
@@ -44,7 +45,7 @@ export function buildHealthIngestPayload(options: BuildPayloadOptions): HealthIn
   };
 
   const body: HealthIngestRequest = {
-    timestamp: new Date().toISOString(),
+    timestamp: options.timestamp ?? new Date().toISOString(),
     signals,
     ...(options.schemaVersion !== undefined ? { schemaVersion: options.schemaVersion } : {}),
     ...(options.repositoryFullName ? { repositoryFullName: options.repositoryFullName } : {}),
