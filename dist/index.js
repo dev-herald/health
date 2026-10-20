@@ -30048,7 +30048,7 @@ function buildHealthIngestPayload(options) {
         ...(options.bundle ? { bundle: options.bundle } : {}),
     };
     const body = {
-        timestamp: new Date().toISOString(),
+        timestamp: options.timestamp ?? new Date().toISOString(),
         signals,
         ...(options.schemaVersion !== undefined ? { schemaVersion: options.schemaVersion } : {}),
         ...(options.repositoryFullName ? { repositoryFullName: options.repositoryFullName } : {}),
@@ -30061,6 +30061,219 @@ function buildHealthIngestPayload(options) {
         throw new Error(`Ingest payload validation failed: ${msg}`);
     }
     return parsed.data;
+}
+
+
+/***/ }),
+
+/***/ 9049:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseInitiativeCounts = parseInitiativeCounts;
+exports.loadInitiativeCounts = loadInitiativeCounts;
+const fs = __importStar(__nccwpck_require__(3024));
+const yaml_1 = __nccwpck_require__(3762);
+const payload_1 = __nccwpck_require__(5240);
+function coerceCount(slug, key, value) {
+    const where = `${slug}.${key}`;
+    if (typeof value === 'number') {
+        if (!Number.isInteger(value) || value < 0 || !Number.isSafeInteger(value)) {
+            throw new Error(`${where} must be a whole number`);
+        }
+        return value;
+    }
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!/^\d+$/.test(trimmed)) {
+            throw new Error(`${where} must be a whole number`);
+        }
+        const n = Number(trimmed);
+        const canonical = trimmed.replace(/^0+(?=\d)/, '');
+        if (!Number.isSafeInteger(n) || String(n) !== canonical) {
+            throw new Error(`${where} must be a whole number`);
+        }
+        return n;
+    }
+    throw new Error(`${where} must be a whole number`);
+}
+function isPlainObject(value) {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+function assertKey(kind, key) {
+    if (key.length === 0 || /\s/.test(key)) {
+        throw new Error(`${kind} must be non-empty and contain no whitespace`);
+    }
+}
+function parseInitiativeCounts(text) {
+    let raw;
+    try {
+        raw = (0, yaml_1.parse)(text);
+    }
+    catch (e) {
+        const detail = e instanceof Error ? e.message : String(e);
+        throw new Error(`initiatives must be a map of slug to metric counts: ${detail}`);
+    }
+    if (!isPlainObject(raw)) {
+        throw new Error('initiatives must be a map of slug to metric counts');
+    }
+    const coerced = {};
+    for (const [slug, metrics] of Object.entries(raw)) {
+        assertKey('initiative slug', slug);
+        if (!isPlainObject(metrics)) {
+            throw new Error(`initiative ${slug} must be a map of metric key to count`);
+        }
+        const counts = {};
+        for (const [key, value] of Object.entries(metrics)) {
+            assertKey(`metric key "${key}"`, key);
+            counts[key] = coerceCount(slug, key, value);
+        }
+        coerced[slug] = counts;
+    }
+    const parsed = payload_1.initiativeCountsSchema.safeParse(coerced);
+    if (!parsed.success) {
+        const msg = parsed.error.issues.map((i) => i.message).join('; ');
+        throw new Error(msg);
+    }
+    return parsed.data;
+}
+function loadInitiativeCounts(inline, filePath) {
+    const text = inline.trim();
+    const file = filePath.trim();
+    if (text.length > 0 && file.length > 0) {
+        throw new Error('Set initiatives or initiatives-path, not both.');
+    }
+    if (text.length === 0 && file.length === 0) {
+        return undefined;
+    }
+    if (file.length > 0) {
+        if (!fs.existsSync(file)) {
+            throw new Error(`initiatives-path not found: ${file}`);
+        }
+        return parseInitiativeCounts(fs.readFileSync(file, 'utf8'));
+    }
+    return parseInitiativeCounts(text);
+}
+
+
+/***/ }),
+
+/***/ 5240:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.measurementsRequestSchema = exports.initiativeCountsSchema = void 0;
+exports.buildMeasurementsPayload = buildMeasurementsPayload;
+const zod_1 = __nccwpck_require__(7151);
+const metricKeySchema = zod_1.z
+    .string()
+    .min(1)
+    .refine((s) => !/\s/.test(s), 'must be non-empty and contain no whitespace');
+const wholeCountSchema = zod_1.z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+exports.initiativeCountsSchema = zod_1.z
+    .record(metricKeySchema, zod_1.z.record(metricKeySchema, wholeCountSchema))
+    .superRefine((initiatives, ctx) => {
+    const slugs = Object.keys(initiatives);
+    if (slugs.length === 0) {
+        ctx.addIssue({ code: 'custom', message: 'initiatives is empty' });
+        return;
+    }
+    for (const slug of slugs) {
+        if (Object.keys(initiatives[slug] ?? {}).length === 0) {
+            ctx.addIssue({
+                code: 'custom',
+                message: `initiative ${slug} has no metrics`,
+                path: [slug],
+            });
+        }
+    }
+});
+exports.measurementsRequestSchema = zod_1.z
+    .object({
+    timestamp: zod_1.z
+        .string()
+        .min(1)
+        .refine((s) => !Number.isNaN(Date.parse(s)), 'Invalid ISO timestamp'),
+    commitSha: zod_1.z.string().min(1),
+    initiatives: exports.initiativeCountsSchema,
+})
+    .strict();
+function buildMeasurementsPayload(options) {
+    if (!options.commitSha) {
+        throw new Error('commit-sha is required to record initiative measurements');
+    }
+    const body = {
+        timestamp: options.timestamp,
+        commitSha: options.commitSha,
+        initiatives: options.initiatives,
+    };
+    const parsed = exports.measurementsRequestSchema.safeParse(body);
+    if (!parsed.success) {
+        const msg = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+        throw new Error(`Initiative measurements payload validation failed: ${msg}`);
+    }
+    return parsed.data;
+}
+
+
+/***/ }),
+
+/***/ 1595:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.measurementsUrl = measurementsUrl;
+/** Measurements live beside health ingest on the same host. */
+function measurementsUrl(ingestUrl) {
+    const url = new URL(ingestUrl);
+    if (url.pathname.endsWith('/health/ingest')) {
+        url.pathname = url.pathname.replace(/\/health\/ingest$/, '/initiatives/measurements');
+    }
+    else {
+        url.pathname = '/api/v1/initiatives/measurements';
+    }
+    url.search = '';
+    url.hash = '';
+    return url.toString();
 }
 
 
@@ -30498,6 +30711,9 @@ const github = __importStar(__nccwpck_require__(4903));
 const path = __importStar(__nccwpck_require__(6760));
 const api_1 = __nccwpck_require__(7822);
 const build_payload_1 = __nccwpck_require__(1777);
+const payload_1 = __nccwpck_require__(5240);
+const parse_1 = __nccwpck_require__(9049);
+const url_1 = __nccwpck_require__(1595);
 const detect_1 = __nccwpck_require__(4351);
 const read_knip_files_1 = __nccwpck_require__(6723);
 const inputs_1 = __nccwpck_require__(5599);
@@ -30524,6 +30740,8 @@ async function run() {
             (typeof ctx.sha === 'string' && ctx.sha.length > 0 ? ctx.sha : undefined);
         const workflowRunUrl = optionalString(core.getInput('workflow-run-url'));
         const bundleStatsPathRaw = core.getInput('bundle-stats-path');
+        const initiativesRaw = core.getInput('initiatives');
+        const initiativesPathRaw = core.getInput('initiatives-path');
         const inputsParsed = inputs_1.actionInputsSchema.safeParse({
             apiKey,
             knipReportPath: knipReportPathRaw,
@@ -30534,6 +30752,8 @@ async function run() {
             commitSha,
             workflowRunUrl,
             bundleStatsPath: bundleStatsPathRaw,
+            initiatives: initiativesRaw,
+            initiativesPath: initiativesPathRaw,
         });
         if (!inputsParsed.success) {
             const msg = inputsParsed.error.issues.map((i) => i.message).join('\n');
@@ -30584,45 +30804,80 @@ async function run() {
             }
             core.info(`CVE scan skipped: ${e instanceof Error ? e.message : String(e)}`);
         }
-        if (!unusedCode && !cveAgg && !bundle) {
-            throw new Error('No signals to send. Provide knip-report-path, a supported lockfile for CVE scanning, and/or bundle-stats-path (bundle analysis output).');
+        const initiativesPath = v.initiativesPath.length > 0
+            ? path.isAbsolute(v.initiativesPath)
+                ? v.initiativesPath
+                : path.join(workspaceRoot, v.initiativesPath)
+            : '';
+        const initiatives = (0, parse_1.loadInitiativeCounts)(v.initiatives, initiativesPath);
+        if (initiatives) {
+            for (const [slug, metrics] of Object.entries(initiatives)) {
+                const parts = Object.entries(metrics)
+                    .map(([key, count]) => `${key}=${count}`)
+                    .join(' ');
+                core.info(`${slug}: ${parts}`);
+            }
         }
-        const payload = (0, build_payload_1.buildHealthIngestPayload)({
-            unusedCode,
-            cve: cveAgg,
-            bundle,
-            repositoryFullName: v.repositoryFullName,
-            commitSha: v.commitSha,
-            workflowRunUrl: v.workflowRunUrl,
-        });
-        core.info(`POST ${v.apiUrl}`);
+        if (!unusedCode && !cveAgg && !bundle && !initiatives) {
+            throw new Error('No signals to send. Provide knip-report-path, a supported lockfile for CVE scanning, bundle-stats-path, and/or initiatives (or initiatives-path).');
+        }
+        const timestamp = new Date().toISOString();
         const headers = (0, api_1.buildHeaders)(v.apiKey);
-        const response = await (0, api_1.makeHttpRequest)(v.apiUrl, 'POST', headers, payload);
-        let json;
-        try {
-            json = JSON.parse(response.data);
+        let createdHealthReport = false;
+        if (unusedCode || cveAgg || bundle) {
+            const payload = (0, build_payload_1.buildHealthIngestPayload)({
+                unusedCode,
+                cve: cveAgg,
+                bundle,
+                repositoryFullName: v.repositoryFullName,
+                commitSha: v.commitSha,
+                workflowRunUrl: v.workflowRunUrl,
+                timestamp,
+            });
+            core.info(`POST ${v.apiUrl}`);
+            const response = await (0, api_1.makeHttpRequest)(v.apiUrl, 'POST', headers, payload);
+            let json;
+            try {
+                json = JSON.parse(response.data);
+            }
+            catch {
+                json = null;
+            }
+            if (response.statusCode < 200 || response.statusCode >= 300) {
+                const bodyPreview = response.data.slice(0, 2000);
+                throw new Error(`Ingest failed (${response.statusCode}): ${bodyPreview}`);
+            }
+            const data = json &&
+                typeof json === 'object' &&
+                json !== null &&
+                'data' in json &&
+                typeof json.data === 'object' &&
+                json.data !== null
+                ? json.data
+                : null;
+            const reportId = data && typeof data.reportId === 'string' ? data.reportId : undefined;
+            if (reportId) {
+                core.setOutput('report-id', reportId);
+            }
+            createdHealthReport = true;
+            core.info(`Health report created${reportId ? `: ${reportId}` : ''}`);
         }
-        catch {
-            json = null;
+        if (initiatives) {
+            const measurements = (0, payload_1.buildMeasurementsPayload)({
+                timestamp,
+                commitSha: v.commitSha,
+                initiatives,
+            });
+            const url = (0, url_1.measurementsUrl)(v.apiUrl);
+            core.info(`POST ${url}`);
+            const response = await (0, api_1.makeHttpRequest)(url, 'POST', headers, measurements);
+            if (response.statusCode < 200 || response.statusCode >= 300) {
+                const bodyPreview = response.data.slice(0, 2000);
+                throw new Error(`Initiative measurements failed (${response.statusCode}): ${bodyPreview}`);
+            }
+            core.info('Initiative measurements recorded');
         }
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-            const bodyPreview = response.data.slice(0, 2000);
-            throw new Error(`Ingest failed (${response.statusCode}): ${bodyPreview}`);
-        }
-        const data = json &&
-            typeof json === 'object' &&
-            json !== null &&
-            'data' in json &&
-            typeof json.data === 'object' &&
-            json.data !== null
-            ? json.data
-            : null;
-        const reportId = data && typeof data.reportId === 'string' ? data.reportId : undefined;
-        if (reportId) {
-            core.setOutput('report-id', reportId);
-        }
-        core.setOutput('status', 'created');
-        core.info(`Health report created${reportId ? `: ${reportId}` : ''}`);
+        core.setOutput('status', createdHealthReport ? 'created' : 'measured');
     }
     catch (e) {
         core.setOutput('status', 'failed');
@@ -30879,6 +31134,16 @@ exports.actionInputsSchema = zod_1.z.object({
     commitSha: zod_1.z.string().optional(),
     workflowRunUrl: zod_1.z.string().optional(),
     bundleStatsPath: zod_1.z
+        .string()
+        .optional()
+        .default('')
+        .transform((s) => s.trim()),
+    initiatives: zod_1.z
+        .string()
+        .optional()
+        .default('')
+        .transform((s) => s.trim()),
+    initiativesPath: zod_1.z
         .string()
         .optional()
         .default('')
