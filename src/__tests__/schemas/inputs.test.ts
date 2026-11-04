@@ -24,6 +24,22 @@ describe('actionInputsSchema', () => {
     if (r.success) expect(r.data.knipReportPath).toBe('');
   });
 
+  it('defaults cve to false', () => {
+    const r = actionInputsSchema.safeParse({
+      ...base,
+      knipReportPath: 'x.json',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.cve).toBe(false);
+  });
+
+  it('parses cve flag', () => {
+    const on = actionInputsSchema.safeParse({ ...base, cve: 'yes' });
+    const off = actionInputsSchema.safeParse({ ...base, cve: 'false' });
+    expect(on.success && on.data.cve).toBe(true);
+    expect(off.success && off.data.cve).toBe(false);
+  });
+
   it('parses cve-detail flag', () => {
     const r = actionInputsSchema.safeParse({
       ...base,

@@ -16,6 +16,8 @@
 
 ## CVE only (lockfile)
 
+CVE scanning is off unless you set `lockfile-path` or `cve: true`. `cve: true` auto-detects `pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`, or `bun.lock`. OSV still uses npm and pnpm only.
+
 ```yaml
       - uses: actions/checkout@v4
 
@@ -25,6 +27,19 @@
           api-key: ${{ secrets.DEV_HERALD_KEY }}
           lockfile-path: ${{ github.workspace }}/package-lock.json
           cve-detail: 'false'
+          workflow-run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+```
+
+The same scan with auto-detect:
+
+```yaml
+      - uses: actions/checkout@v4
+
+      - name: Upload health data to Dev Herald
+        uses: dev-herald/health@v1
+        with:
+          api-key: ${{ secrets.DEV_HERALD_KEY }}
+          cve: 'true'
           workflow-run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 ```
 

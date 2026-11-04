@@ -12,6 +12,7 @@ import { actionInputsSchema } from './schemas/inputs';
 import { bundleSignalSchema, type BundleSignal } from './schemas/ingest-body';
 import { parseBundleStatsInput } from './signals/bundle';
 import { computeCveAggregates } from './signals/cve';
+import { shouldScanCve } from './signals/should-scan-cve';
 import { mapKnipReportToSignals } from './signals/knip';
 import type { IngestSuccessData } from './types';
 
@@ -27,6 +28,7 @@ async function run(): Promise<void> {
     const apiKey = core.getInput('api-key', { required: true });
     const knipReportPathRaw = core.getInput('knip-report-path');
     const lockfilePathRaw = core.getInput('lockfile-path');
+    const cveRaw = core.getInput('cve');
     const cveDetailRaw = core.getInput('cve-detail');
     const apiUrl = optionalString(core.getInput('api-url')) ?? DEFAULT_API_URL;
 
@@ -46,6 +48,7 @@ async function run(): Promise<void> {
       apiKey,
       knipReportPath: knipReportPathRaw,
       lockfilePath: lockfilePathRaw,
+      cve: cveRaw,
       cveDetail: cveDetailRaw,
       apiUrl,
       repositoryFullName,
@@ -93,30 +96,39 @@ async function run(): Promise<void> {
 
     let cveAgg;
     const lockOverride = v.lockfilePath.length > 0 ? v.lockfilePath : undefined;
+    const scanCve = shouldScanCve(v.cve, v.lockfilePath);
 
-    try {
-      const detected = detectAdapter(workspaceRoot, lockOverride);
-      if (!detected.adapter.supported) {
-        core.warning(
-          `CVE scanning does not support ${detected.adapter.pmName} yet; lockfile at ${detected.lockfilePath}. Skipping OSV. Use pnpm-lock.yaml or package-lock.json, or set lockfile-path to one of those.`
-        );
-      } else {
-        const deps = await detected.adapter.listDeps(detected.lockfileDir, detected.lockfilePath);
-        core.info(`${detected.adapter.pmName}: ${detected.lockfilePath} (${deps.length} packages)`);
-        cveAgg = await computeCveAggregates(deps, {
-          detail: v.cveDetail,
-          pmName: detected.adapter.pmName,
-          osvEcosystem: detected.adapter.osvEcosystem,
-        });
-        core.info(
-          `CVE: prod vulnerablePackages=${cveAgg.prod.packages.length} totalVulns=${cveAgg.prod.totalVulnerabilities}; dev vulnerablePackages=${cveAgg.dev.packages.length} totalVulns=${cveAgg.dev.totalVulnerabilities}`
-        );
+    if (!scanCve && v.cveDetail) {
+      core.warning(
+        'cve-detail is set but CVE scanning is off. Set cve to true or provide lockfile-path to run the scan.'
+      );
+    }
+
+    if (scanCve) {
+      try {
+        const detected = detectAdapter(workspaceRoot, lockOverride);
+        if (!detected.adapter.supported) {
+          core.warning(
+            `CVE scanning does not support ${detected.adapter.pmName} yet; lockfile at ${detected.lockfilePath}. Skipping OSV. Use pnpm-lock.yaml or package-lock.json, or set lockfile-path to one of those.`
+          );
+        } else {
+          const deps = await detected.adapter.listDeps(detected.lockfileDir, detected.lockfilePath);
+          core.info(`${detected.adapter.pmName}: ${detected.lockfilePath} (${deps.length} packages)`);
+          cveAgg = await computeCveAggregates(deps, {
+            detail: v.cveDetail,
+            pmName: detected.adapter.pmName,
+            osvEcosystem: detected.adapter.osvEcosystem,
+          });
+          core.info(
+            `CVE: prod vulnerablePackages=${cveAgg.prod.packages.length} totalVulns=${cveAgg.prod.totalVulnerabilities}; dev vulnerablePackages=${cveAgg.dev.packages.length} totalVulns=${cveAgg.dev.totalVulnerabilities}`
+          );
+        }
+      } catch (e) {
+        if (lockOverride) {
+          throw e;
+        }
+        core.info(`CVE scan skipped: ${e instanceof Error ? e.message : String(e)}`);
       }
-    } catch (e) {
-      if (lockOverride) {
-        throw e;
-      }
-      core.info(`CVE scan skipped: ${e instanceof Error ? e.message : String(e)}`);
     }
 
     const initiativesPath =
@@ -137,7 +149,7 @@ async function run(): Promise<void> {
 
     if (!unusedCode && !cveAgg && !bundle && !initiatives) {
       throw new Error(
-        'No signals to send. Provide knip-report-path, a supported lockfile for CVE scanning, bundle-stats-path, and/or initiatives (or initiatives-path).'
+        'No signals to send. Provide knip-report-path, bundle-stats-path, initiatives (or initiatives-path), and/or opt into CVE scanning with cve or lockfile-path.'
       );
     }
 

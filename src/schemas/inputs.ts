@@ -14,6 +14,14 @@ export const actionInputsSchema = z.object({
     .optional()
     .default('')
     .transform((s) => s.trim()),
+  cve: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((s) => {
+      const v = s.trim().toLowerCase();
+      return v === 'true' || v === '1' || v === 'yes';
+    }),
   cveDetail: z
     .string()
     .optional()

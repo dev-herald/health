@@ -10,12 +10,17 @@ inputs:
     required: true
 
   knip-report-path:
-    description: 'Path to a Knip JSON report file (optional if a lockfile is present for CVE scanning)'
+    description: 'Path to a Knip JSON report file. Omit to skip unused-code signals.'
     required: false
     default: ''
 
+  cve:
+    description: 'If true, scan a lockfile for CVEs. With no lockfile-path, auto-detects pnpm-lock.yaml, yarn.lock, package-lock.json, or bun.lock (OSV uses npm and pnpm only). Default false, so an initiatives-only run does not create a health report.'
+    required: false
+    default: 'false'
+
   lockfile-path:
-    description: 'Optional path to lockfile; otherwise auto-detects pnpm-lock.yaml, yarn.lock, package-lock.json, or bun.lock (CVE/OSV uses npm and pnpm only; yarn or bun emits a warning and skips CVE)'
+    description: 'Path to a lockfile to scan for CVEs. Setting this opts into the scan. CVE/OSV uses npm and pnpm only; yarn or bun emits a warning and skips CVE. Omit unless cve is true (then the action auto-detects a lockfile).'
     required: false
     default: ''
 

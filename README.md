@@ -63,9 +63,10 @@ Knip is just one example - Dev Herald is designed to support multiple signals ov
 | Input                  | Description                                                                                                                                                                             |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `api-key`              | Required. Project API key                                                                                                                                                               |
-| `knip-report-path`     | Path to a Knip JSON report (optional if a supported lockfile is present for CVEs)                                                                                                       |
-| `lockfile-path`        | Optional path to `package-lock.json` or `pnpm-lock.yaml`; otherwise auto-detect under repo root                                                                                         |
-| `cve-detail`           | If `true`, enrich each vulnerability with OSV severity, description text, and aggregate severity counts (slower). If `false`, still sends vulnerable **package names** and OSV ids only |
+| `knip-report-path`     | Path to a Knip JSON report. Omit to skip unused-code signals.                                                                                                                           |
+| `cve`                  | If `true`, scan a lockfile for CVEs. Default `false`. With no `lockfile-path`, auto-detects a lockfile under the repo root.                                                             |
+| `lockfile-path`        | Path to `package-lock.json` or `pnpm-lock.yaml`. Setting this opts into the CVE scan. Omit it when `cve` is `true` to auto-detect.                                                       |
+| `cve-detail`           | If `true`, enrich each vulnerability with OSV severity, description text, and aggregate severity counts (slower). If `false`, still sends vulnerable **package names** and OSV ids only. Does not start a scan by itself. |
 | `api-url`              | Defaults to Dev Herald ingest API                                                                                                                                                       |
 | `repository-full-name` | Optional override                                                                                                                                                                       |
 | `commit-sha`           | Optional override                                                                                                                                                                       |
@@ -103,6 +104,7 @@ The action POSTs those counts to `POST /api/v1/initiatives/measurements` on the 
 
 When this step also uploads a health report, the report is sent first and both requests share one timestamp. A run that only sends initiatives sets the `status` output to `measured`. A run that creates a health report still sets `status` to `created`.
 
+CVE scanning is opt-in. It runs only when `cve` is `true` or `lockfile-path` is set. Knip and bundle stats do not start a scan, and a checkout that contains a lockfile does not either. The initiatives example above sends measurements only.
 
 When CVE scanning runs (npm or pnpm lockfile), the ingest payload includes `signals.cve` with `prod` / `dev` sections: `totalVulnerabilities`, a `packages` list (`name`, `version`, `vulnerabilities[]` with at least `id`), and optionally `severity` summary counts when `cve-detail` is enabled.
 
