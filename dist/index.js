@@ -30720,6 +30720,7 @@ const inputs_1 = __nccwpck_require__(5599);
 const ingest_body_1 = __nccwpck_require__(9022);
 const bundle_1 = __nccwpck_require__(906);
 const cve_1 = __nccwpck_require__(4988);
+const should_scan_cve_1 = __nccwpck_require__(8382);
 const knip_1 = __nccwpck_require__(3770);
 const DEFAULT_API_URL = 'https://dev-herald.com/api/v1/health/ingest';
 function optionalString(v) {
@@ -30731,6 +30732,7 @@ async function run() {
         const apiKey = core.getInput('api-key', { required: true });
         const knipReportPathRaw = core.getInput('knip-report-path');
         const lockfilePathRaw = core.getInput('lockfile-path');
+        const cveRaw = core.getInput('cve');
         const cveDetailRaw = core.getInput('cve-detail');
         const apiUrl = optionalString(core.getInput('api-url')) ?? DEFAULT_API_URL;
         const ctx = github.context;
@@ -30746,6 +30748,7 @@ async function run() {
             apiKey,
             knipReportPath: knipReportPathRaw,
             lockfilePath: lockfilePathRaw,
+            cve: cveRaw,
             cveDetail: cveDetailRaw,
             apiUrl,
             repositoryFullName,
@@ -30782,27 +30785,33 @@ async function run() {
         }
         let cveAgg;
         const lockOverride = v.lockfilePath.length > 0 ? v.lockfilePath : undefined;
-        try {
-            const detected = (0, detect_1.detectAdapter)(workspaceRoot, lockOverride);
-            if (!detected.adapter.supported) {
-                core.warning(`CVE scanning does not support ${detected.adapter.pmName} yet; lockfile at ${detected.lockfilePath}. Skipping OSV. Use pnpm-lock.yaml or package-lock.json, or set lockfile-path to one of those.`);
-            }
-            else {
-                const deps = await detected.adapter.listDeps(detected.lockfileDir, detected.lockfilePath);
-                core.info(`${detected.adapter.pmName}: ${detected.lockfilePath} (${deps.length} packages)`);
-                cveAgg = await (0, cve_1.computeCveAggregates)(deps, {
-                    detail: v.cveDetail,
-                    pmName: detected.adapter.pmName,
-                    osvEcosystem: detected.adapter.osvEcosystem,
-                });
-                core.info(`CVE: prod vulnerablePackages=${cveAgg.prod.packages.length} totalVulns=${cveAgg.prod.totalVulnerabilities}; dev vulnerablePackages=${cveAgg.dev.packages.length} totalVulns=${cveAgg.dev.totalVulnerabilities}`);
-            }
+        const scanCve = (0, should_scan_cve_1.shouldScanCve)(v.cve, v.lockfilePath);
+        if (!scanCve && v.cveDetail) {
+            core.warning('cve-detail is set but CVE scanning is off. Set cve to true or provide lockfile-path to run the scan.');
         }
-        catch (e) {
-            if (lockOverride) {
-                throw e;
+        if (scanCve) {
+            try {
+                const detected = (0, detect_1.detectAdapter)(workspaceRoot, lockOverride);
+                if (!detected.adapter.supported) {
+                    core.warning(`CVE scanning does not support ${detected.adapter.pmName} yet; lockfile at ${detected.lockfilePath}. Skipping OSV. Use pnpm-lock.yaml or package-lock.json, or set lockfile-path to one of those.`);
+                }
+                else {
+                    const deps = await detected.adapter.listDeps(detected.lockfileDir, detected.lockfilePath);
+                    core.info(`${detected.adapter.pmName}: ${detected.lockfilePath} (${deps.length} packages)`);
+                    cveAgg = await (0, cve_1.computeCveAggregates)(deps, {
+                        detail: v.cveDetail,
+                        pmName: detected.adapter.pmName,
+                        osvEcosystem: detected.adapter.osvEcosystem,
+                    });
+                    core.info(`CVE: prod vulnerablePackages=${cveAgg.prod.packages.length} totalVulns=${cveAgg.prod.totalVulnerabilities}; dev vulnerablePackages=${cveAgg.dev.packages.length} totalVulns=${cveAgg.dev.totalVulnerabilities}`);
+                }
             }
-            core.info(`CVE scan skipped: ${e instanceof Error ? e.message : String(e)}`);
+            catch (e) {
+                if (lockOverride) {
+                    throw e;
+                }
+                core.info(`CVE scan skipped: ${e instanceof Error ? e.message : String(e)}`);
+            }
         }
         const initiativesPath = v.initiativesPath.length > 0
             ? path.isAbsolute(v.initiativesPath)
@@ -30819,7 +30828,7 @@ async function run() {
             }
         }
         if (!unusedCode && !cveAgg && !bundle && !initiatives) {
-            throw new Error('No signals to send. Provide knip-report-path, a supported lockfile for CVE scanning, bundle-stats-path, and/or initiatives (or initiatives-path).');
+            throw new Error('No signals to send. Provide knip-report-path, bundle-stats-path, initiatives (or initiatives-path), and/or opt into CVE scanning with cve or lockfile-path.');
         }
         const timestamp = new Date().toISOString();
         const headers = (0, api_1.buildHeaders)(v.apiKey);
@@ -31117,6 +31126,14 @@ exports.actionInputsSchema = zod_1.z.object({
         .optional()
         .default('')
         .transform((s) => s.trim()),
+    cve: zod_1.z
+        .string()
+        .optional()
+        .default('false')
+        .transform((s) => {
+        const v = s.trim().toLowerCase();
+        return v === 'true' || v === '1' || v === 'yes';
+    }),
     cveDetail: zod_1.z
         .string()
         .optional()
@@ -31980,6 +31997,21 @@ function mapKnipReportToSignals(report) {
         unusedDepsList,
         unusedTypeExportsList,
     };
+}
+
+
+/***/ }),
+
+/***/ 8382:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.shouldScanCve = shouldScanCve;
+/** CVE runs only when the caller opts in with `cve` or an explicit lockfile path. */
+function shouldScanCve(cve, lockfilePath) {
+    return cve || lockfilePath.length > 0;
 }
 
 
